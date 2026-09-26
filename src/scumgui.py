@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
         self.queue_items: list[QueueItem] = []
         self.current_index = -1
         self.cancelling = False
+        self.cancel_all_requested = False
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -134,17 +135,6 @@ class MainWindow(QMainWindow):
         base_folder = str(self.settings.value("base_folder", "M:\\Blah"))
         self.destination_edit = QLineEdit(base_folder)
         input_grid.addWidget(self.destination_edit, 1, 1, 1, 3)
-
-        input_grid.addWidget(QLabel("Profile"), 2, 0)
-        self.profile_combo = QComboBox()
-        self.profile_combo.addItem("Default")
-        input_grid.addWidget(self.profile_combo, 2, 1)
-
-        input_grid.addWidget(QLabel("Workers"), 2, 2)
-        self.workers_spin = QSpinBox()
-        self.workers_spin.setRange(1, 8)
-        self.workers_spin.setValue(1)
-        input_grid.addWidget(self.workers_spin, 2, 3)
 
         layout.addWidget(input_box)
 
@@ -179,6 +169,11 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self.cancel_download)
         controls.addWidget(self.cancel_button, 0, 4)
+
+        self.cancel_all_button = QPushButton("Cancel All")
+        self.cancel_all_button.setEnabled(False)
+        self.cancel_all_button.clicked.connect(self.cancel_all)
+        controls.addWidget(self.cancel_all_button, 0, 5)
 
         queue_layout.addLayout(controls)
         layout.addWidget(queue_box, 1)
@@ -382,6 +377,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"Downloading: {item.destination}  —  {item.url}  |  D:0  S:0  E:0")
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+        self.cancel_all_button.setEnabled(True)
         self.cancelling = False
 
         self.process.setWorkingDirectory(str(destination))
@@ -422,6 +418,30 @@ class MainWindow(QMainWindow):
         # sends WM_CLOSE on Windows, which console applications may not handle.
         # kill() uses TerminateProcess, so use it for a reliable immediate
         # cancellation.
+        self.process.kill()
+        self.process.waitForFinished(1500)
+
+    def cancel_all(self) -> None:
+        if self.process.state() == QProcess.ProcessState.NotRunning:
+            for item in self.queue_items:
+                if item.status == QueueItem.WAITING:
+                    item.status = QueueItem.CANCELLED
+                    self.refresh_queue_item(item)
+            self.update_queue_progress()
+            self.start_next_or_finish()
+            return
+
+        self.cancel_all_requested = True
+        self.cancelling = True
+        self.log_message("Stopping gallery-dl and cancelling remaining queue items…")
+        for item in self.queue_items:
+            if item.status == QueueItem.WAITING:
+                item.status = QueueItem.CANCELLED
+                self.refresh_queue_item(item)
+        self.update_queue_progress()
+        # Do not start another gallery-dl process after this one exits.
+        # Waiting items are cancelled before their destination folders are
+        # created, so Cancel All cannot leave a trail of empty folders.
         self.process.kill()
         self.process.waitForFinished(1500)
 
@@ -609,6 +629,21 @@ class MainWindow(QMainWindow):
         self.current_index = -1
         self.cancelling = False
 
+        if self.cancel_all_requested:
+            self.cancel_all_requested = False
+            self.progress.setRange(0, 100)
+            self.progress.setValue(100)
+            self.progress.setFormat("Cancelled")
+            totals = self.queue_totals()
+            self.status_label.setText(
+                f"Queue cancelled  |  Downloaded: {totals[0]}  "
+                f"Skipped: {totals[1]}  Failed: {totals[2]}"
+            )
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
+            self.cancel_all_button.setEnabled(False)
+            return
+
         next_index = self.next_waiting_index()
         if next_index >= 0:
             self.download_button.setEnabled(True)
@@ -627,6 +662,7 @@ class MainWindow(QMainWindow):
         )
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
+        self.cancel_all_button.setEnabled(False)
 
     def log_event(self, glyph: str, color: str, message: str) -> None:
         cursor = self.log.textCursor()
