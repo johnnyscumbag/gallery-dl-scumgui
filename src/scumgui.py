@@ -89,7 +89,14 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(resource_path("assets/scumgui.ico"))))
         self.resize(980, 720)
 
-        self.settings = QSettings(APP_NAME, APP_NAME)
+        self.settings = QSettings(
+            QSettings.Format.IniFormat,
+            QSettings.Scope.IniFormat,
+            APP_NAME,
+            APP_NAME,
+        )
+        if getattr(sys, "frozen", False):
+            self.settings.setFileName(str(app_root() / "ScumGUI.ini"))
 
         self.process = QProcess(self)
         self.process.readyReadStandardOutput.connect(self.read_stdout)
@@ -118,8 +125,11 @@ class MainWindow(QMainWindow):
         input_grid.addWidget(self.add_button, 0, 3)
 
         input_grid.addWidget(QLabel("Destination"), 1, 0)
-        saved_destination = self.settings.value("destination", str(Path.cwd()))
-        self.destination_edit = QLineEdit(str(saved_destination))
+        default_destination = self.settings.value(
+            "base_folder",
+            str(Path.home() / "Downloads"),
+        )
+        self.destination_edit = QLineEdit(str(default_destination))
         input_grid.addWidget(self.destination_edit, 1, 1, 1, 2)
 
         browse_button = QPushButton("Browse…")
@@ -273,16 +283,12 @@ class MainWindow(QMainWindow):
                 self.queue_items.remove(item)
         self.update_queue_progress()
 
-    def save_destination(self, destination: str) -> None:
-        self.settings.setValue("destination", destination)
-
     def choose_destination(self) -> None:
         folder = QFileDialog.getExistingDirectory(
             self, "Choose download destination", self.destination_edit.text()
         )
         if folder:
             self.destination_edit.setText(folder)
-            self.save_destination(folder)
 
     def update_queue_progress(self) -> None:
         total = len(self.queue_items)
@@ -309,7 +315,6 @@ class MainWindow(QMainWindow):
         destination = Path(self.destination_edit.text()).expanduser()
         try:
             destination.mkdir(parents=True, exist_ok=True)
-            self.save_destination(str(destination))
         except OSError as exc:
             QMessageBox.warning(
                 self,
