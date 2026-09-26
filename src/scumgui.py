@@ -53,7 +53,15 @@ def app_root() -> Path:
     )
 
 
-def resource_path(relative_path: str) -> Path:\n    if getattr(sys, "frozen", False):\n        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)) / relative_path\n    return app_root() / relative_path\n\n\ndef find_gallery_dl() -> str | None:
+def resource_path(relative_path: str) -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(
+            getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)
+        ) / relative_path
+    return app_root() / relative_path
+
+
+def find_gallery_dl() -> str | None:
     root = app_root()
 
     for candidate in (
@@ -70,6 +78,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
+        self.setWindowIcon(QIcon(str(resource_path("assets/scumgui.ico"))))
         self.resize(980, 720)
 
         self.process = QProcess(self)
