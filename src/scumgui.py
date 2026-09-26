@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt
+from PySide6.QtCore import QProcess, QSettings, Qt
 from PySide6.QtGui import QColor, QIcon
 from progress import parse_progress
 
@@ -89,6 +89,8 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(resource_path("assets/scumgui.ico"))))
         self.resize(980, 720)
 
+        self.settings = QSettings(APP_NAME, APP_NAME)
+
         self.process = QProcess(self)
         self.process.readyReadStandardOutput.connect(self.read_stdout)
         self.process.readyReadStandardError.connect(self.read_stderr)
@@ -116,7 +118,8 @@ class MainWindow(QMainWindow):
         input_grid.addWidget(self.add_button, 0, 3)
 
         input_grid.addWidget(QLabel("Destination"), 1, 0)
-        self.destination_edit = QLineEdit(str(Path.cwd()))
+        saved_destination = self.settings.value("destination", str(Path.cwd()))
+        self.destination_edit = QLineEdit(str(saved_destination))
         input_grid.addWidget(self.destination_edit, 1, 1, 1, 2)
 
         browse_button = QPushButton("Browse…")
@@ -270,12 +273,16 @@ class MainWindow(QMainWindow):
                 self.queue_items.remove(item)
         self.update_queue_progress()
 
+    def save_destination(self, destination: str) -> None:
+        self.settings.setValue("destination", destination)
+
     def choose_destination(self) -> None:
         folder = QFileDialog.getExistingDirectory(
             self, "Choose download destination", self.destination_edit.text()
         )
         if folder:
             self.destination_edit.setText(folder)
+            self.save_destination(folder)
 
     def update_queue_progress(self) -> None:
         total = len(self.queue_items)
@@ -302,6 +309,7 @@ class MainWindow(QMainWindow):
         destination = Path(self.destination_edit.text()).expanduser()
         try:
             destination.mkdir(parents=True, exist_ok=True)
+            self.save_destination(str(destination))
         except OSError as exc:
             QMessageBox.warning(
                 self,
