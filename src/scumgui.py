@@ -51,6 +51,7 @@ class QueueItem:
         self.skipped = 0
         self.errors = 0
         self.current_file = ""
+        self.last_error_reason = ""
         self.started_at = 0.0
 
 
@@ -408,7 +409,7 @@ class MainWindow(QMainWindow):
             if self.consume_result_marker(line):
                 continue
 
-            if self.is_redundant_gallery_output(line):
+            if self.consume_gallery_log(line):
                 continue
 
             progress = parse_progress(line)
@@ -426,6 +427,66 @@ class MainWindow(QMainWindow):
         # --Print event marker. Keep the ScumGUI event line and suppress the
         # duplicate path-only output.
         return bool(re.fullmatch(r"[*.]\\.*", line.strip()))
+
+    def consume_gallery_log(self, line: str) -> bool:
+        match = re.match(
+            r"^\\[(?P<logger>[^]]+)\\]\\[(?P<level>warning|error|info)\\]\\s+(?P<message>.*)$",
+            line,
+            re.IGNORECASE,
+        )
+        if not match:
+            return self.is_redundant_gallery_output(line)
+
+        level = match.group("level").lower()
+        message = match.group("message").strip()
+        item = self.queue_items[self.current_index] if self.current_index >= 0 else None
+
+        timeout = re.search(
+            r"ConnectTimeoutError: Connection to (?P<host>[^ ]+) timed out\\. "
+            r"\\((?P<attempt>\\d+)/(?P<total>\\d+)\\)",
+            message,
+        )
+        if timeout:
+            reason = (
+                f"Connection timeout — {timeout.group('host')} — "
+                f"retry {timeout.group('attempt')}/{timeout.group('total')}"
+            )
+            if item is not None:
+                item.last_error_reason = (
+                    f"connection timeout after {timeout.group('total')} retries"
+                )
+            self.log_event("⚠", "orange", reason)
+            return True
+
+        not_found = re.search(
+            r"(?P<code>\\d{3}) (?P<reason>[^:]+?) for (?P<url>https?://\\S+)",
+            message,
+        )
+        if not_found and not_found.group("code") == "404":
+            url = not_found.group("url").rstrip(".,")
+            host = url.split("/", 3)[2] if "://" in url else url
+            reason = f"404 Not Found — {host}"
+            if item is not None:
+                item.last_error_reason = "404 Not Found"
+            self.log_event("⚠", "orange", reason)
+            return True
+
+        if level == "error" and message.lower().startswith("failed to download"):
+            if item is not None and not item.last_error_reason:
+                item.last_error_reason = "download failed"
+            return True
+
+        if level == "warning":
+            self.log_event("⚠", "orange", message)
+            return True
+
+        if level == "error":
+            if item is not None:
+                item.last_error_reason = message
+            self.log_event("✗", "red", message)
+            return True
+
+        return False
 
     def consume_result_marker(self, line: str) -> bool:
         if self.current_index < 0:
@@ -449,7 +510,10 @@ class MainWindow(QMainWindow):
                 elif counter == "skipped":
                     self.log_event("⚠", "orange", filename)
                 else:
-                    self.log_event("✗", "red", filename)
+                    reason = item.last_error_reason
+                    message = f"{filename} — {reason}" if reason else filename
+                    self.log_event("✗", "red", message)
+                item.last_error_reason = ""
                 return True
         return False
 
