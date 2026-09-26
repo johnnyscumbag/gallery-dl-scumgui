@@ -129,8 +129,8 @@ class MainWindow(QMainWindow):
         input_grid.addWidget(self.add_button, 0, 3)
 
         input_grid.addWidget(QLabel("Destination"), 1, 0)
-        self.destination_edit = QLineEdit()
-        self.destination_edit.setPlaceholderText("Folder name, e.g. emily.deann")
+        base_folder = str(self.settings.value("base_folder", "M:\\Blah"))
+        self.destination_edit = QLineEdit(base_folder)
         input_grid.addWidget(self.destination_edit, 1, 1, 1, 3)
 
         input_grid.addWidget(QLabel("Profile"), 2, 0)
@@ -216,21 +216,38 @@ class MainWindow(QMainWindow):
         if not url:
             return
 
-        destination = self.destination_edit.text().strip()
-        if not destination:
+        destination_text = self.destination_edit.text().strip()
+        if not destination_text:
             QMessageBox.warning(
                 self,
                 APP_NAME,
-                "Enter a destination folder name before adding the URL.",
+                "Enter a destination folder before adding the URL.",
             )
             return
 
-        destination_path = Path(destination)
-        if destination_path.is_absolute() or ".." in destination_path.parts:
+        base_folder = Path(
+            self.settings.value("base_folder", "M:\\Blah")
+        ).expanduser()
+        entered_path = Path(destination_text).expanduser()
+        base_resolved = base_folder.resolve()
+        entered_resolved = entered_path.resolve()
+
+        try:
+            destination_path = entered_resolved.relative_to(base_resolved)
+        except ValueError:
             QMessageBox.warning(
                 self,
                 APP_NAME,
-                "The destination must be a relative folder name inside the configured base folder.",
+                "The destination must be inside the configured base folder.",
+            )
+            return
+
+        destination = str(destination_path)
+        if not destination or destination == ".":
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "Enter a destination folder name after the base folder.",
             )
             return
 
