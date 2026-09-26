@@ -37,6 +37,7 @@ class QueueItem:
     WAITING = "Waiting"
     DOWNLOADING = "Downloading"
     COMPLETED = "Completed"
+    COMPLETED_WITH_ERRORS = "Completed with errors"
     FAILED = "Failed"
     CANCELLED = "Cancelled"
 
@@ -222,6 +223,8 @@ class MainWindow(QMainWindow):
 
         if item.status == QueueItem.COMPLETED:
             item.list_item.setForeground(QColor("green"))
+        elif item.status == QueueItem.COMPLETED_WITH_ERRORS:
+            item.list_item.setForeground(QColor("orange"))
         elif item.status == QueueItem.FAILED:
             item.list_item.setForeground(QColor("red"))
         elif item.status == QueueItem.CANCELLED:
@@ -247,6 +250,7 @@ class MainWindow(QMainWindow):
 
         finished = {
             QueueItem.COMPLETED,
+            QueueItem.COMPLETED_WITH_ERRORS,
             QueueItem.FAILED,
             QueueItem.CANCELLED,
         }
@@ -406,17 +410,24 @@ class MainWindow(QMainWindow):
 
         if self.cancelling:
             item.status = QueueItem.CANCELLED
-        elif exit_status == QProcess.ExitStatus.CrashExit or exit_code != 0:
+        elif exit_status == QProcess.ExitStatus.CrashExit:
             item.status = QueueItem.FAILED
-        else:
+        elif exit_code == 0:
             item.status = QueueItem.COMPLETED
+        elif item.errors > 0 and (item.downloaded > 0 or item.skipped > 0):
+            # gallery-dl can continue downloading after individual files fail.
+            # A non-zero exit code therefore does not necessarily mean that
+            # the whole URL failed.
+            item.status = QueueItem.COMPLETED_WITH_ERRORS
+        else:
+            item.status = QueueItem.FAILED
 
         self.refresh_queue_item(item)
         elapsed = time.monotonic() - item.started_at if item.started_at else 0
         self.log_message(
             f"Finished: {item.url} — {item.status} "
             f"(exit code {exit_code}, downloaded {item.downloaded}, "
-            f"skipped {item.skipped}, errors {item.errors}, elapsed {elapsed:.1f}s)"
+            f"skipped {item.skipped}, failed {item.errors}, elapsed {elapsed:.1f}s)"
         )
 
         self.start_next_or_finish()
@@ -435,8 +446,11 @@ class MainWindow(QMainWindow):
         self.progress.setValue(100)
         self.progress.setFormat("Complete")
         totals = self.queue_totals()
+        total_errors = totals[2]
+        result_text = "Completed with errors" if total_errors else "Completed"
         self.status_label.setText(
-            f"Queue finished  |  D:{totals[0]}  S:{totals[1]}  E:{totals[2]}"
+            f"Queue {result_text.lower()}  |  "
+            f"Downloaded: {totals[0]}  Skipped: {totals[1]}  Failed: {total_errors}"
         )
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
