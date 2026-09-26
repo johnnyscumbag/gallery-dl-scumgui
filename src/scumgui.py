@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
         status_layout = QVBoxLayout(status_box)
 
         self.progress = QProgressBar()
-        self.progress.setRange(0, 0)
+        self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setFormat("Idle")
         status_layout.addWidget(self.progress)
