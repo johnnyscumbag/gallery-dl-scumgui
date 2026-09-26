@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -29,20 +30,34 @@ from PySide6.QtWidgets import (
 APP_NAME = "gallery-dl ScumGUI"
 
 
+class QueueItem:
+    WAITING = "Waiting"
+    DOWNLOADING = "Downloading"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    CANCELLED = "Cancelled"
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self.status = self.WAITING
+        self.list_item: QListWidgetItem | None = None
+
+
 def app_root() -> Path:
-    # Keep the bundled engine relative to ScumGUI when packaged.
-    return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+    return (
+        Path(sys.executable).resolve().parent
+        if getattr(sys, "frozen", False)
+        else Path(__file__).resolve().parents[1]
+    )
 
 
 def find_gallery_dl() -> str | None:
     root = app_root()
 
-    candidates = [
+    for candidate in (
         root / "gallery-dl" / "gallery-dl.exe",
         root / "gallery-dl.exe",
-    ]
-
-    for candidate in candidates:
+    ):
         if candidate.is_file():
             return str(candidate)
 
@@ -59,7 +74,10 @@ class MainWindow(QMainWindow):
         self.process.readyReadStandardOutput.connect(self.read_stdout)
         self.process.readyReadStandardError.connect(self.read_stderr)
         self.process.finished.connect(self.process_finished)
-        self.current_urls: list[str] = []
+
+        self.queue_items: list[QueueItem] = []
+        self.current_index = -1
+        self.cancelling = False
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -101,7 +119,9 @@ class MainWindow(QMainWindow):
 
         queue_box = QGroupBox("Queue")
         queue_layout = QVBoxLayout(queue_box)
+
         self.queue = QListWidget()
+        self.queue.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         queue_layout.addWidget(self.queue)
 
         controls = QGridLayout()
@@ -110,8 +130,8 @@ class MainWindow(QMainWindow):
         remove_button.clicked.connect(self.remove_selected)
         controls.addWidget(remove_button, 0, 0)
 
-        clear_button = QPushButton("Clear Queue")
-        clear_button.clicked.connect(self.queue.clear)
+        clear_button = QPushButton("Clear Finished")
+        clear_button.clicked.connect(self.clear_finished)
         controls.addWidget(clear_button, 0, 1)
 
         self.download_button = QPushButton("Download")
@@ -132,7 +152,7 @@ class MainWindow(QMainWindow):
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         self.progress.setValue(0)
-        self.progress.setFormat("Working…")
+        self.progress.setFormat("Idle")
         status_layout.addWidget(self.progress)
 
         self.status_label = QLabel("Ready")
@@ -154,20 +174,65 @@ class MainWindow(QMainWindow):
         if engine:
             self.log_message(f"gallery-dl engine: {engine}")
         else:
-            self.log_message("gallery-dl engine not found. Falling back to PATH when available.")
+            self.log_message("gallery-dl engine not found; PATH fallback unavailable.")
 
     def add_url(self) -> None:
         url = self.url_edit.text().strip()
         if not url:
             return
 
-        self.queue.addItem(url)
+        item = QueueItem(url)
+        self.queue_items.append(item)
+
+        list_item = QListWidgetItem()
+        item.list_item = list_item
+        self.queue.addItem(list_item)
+        self.refresh_queue_item(item)
+
         self.url_edit.clear()
         self.log_message(f"Added: {url}")
 
+    def refresh_queue_item(self, item: QueueItem) -> None:
+        if item.list_item is None:
+            return
+
+        item.list_item.setText(f"[{item.status}]  {item.url}")
+
+        if item.status == QueueItem.COMPLETED:
+            item.list_item.setForeground(QColor("green"))
+        elif item.status == QueueItem.FAILED:
+            item.list_item.setForeground(QColor("red"))
+        elif item.status == QueueItem.CANCELLED:
+            item.list_item.setForeground(QColor("gray"))
+        else:
+            item.list_item.setForeground(self.palette().text().color())
+
     def remove_selected(self) -> None:
-        for item in self.queue.selectedItems():
-            self.queue.takeItem(self.queue.row(item))
+        selected = set(self.queue.selectedItems())
+        if not selected:
+            return
+
+        if self.process.state() != QProcess.ProcessState.NotRunning:
+            return
+
+        self.queue_items = [item for item in self.queue_items if item.list_item not in selected]
+        for list_item in selected:
+            self.queue.takeItem(self.queue.row(list_item))
+
+    def clear_finished(self) -> None:
+        if self.process.state() != QProcess.ProcessState.NotRunning:
+            return
+
+        finished = {
+            QueueItem.COMPLETED,
+            QueueItem.FAILED,
+            QueueItem.CANCELLED,
+        }
+        for item in list(self.queue_items):
+            if item.status in finished:
+                if item.list_item is not None:
+                    self.queue.takeItem(self.queue.row(item.list_item))
+                self.queue_items.remove(item)
 
     def choose_destination(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -178,11 +243,6 @@ class MainWindow(QMainWindow):
 
     def start_download(self) -> None:
         if self.process.state() != QProcess.ProcessState.NotRunning:
-            return
-
-        urls = [self.queue.item(i).text() for i in range(self.queue.count())]
-        if not urls:
-            QMessageBox.information(self, APP_NAME, "Add at least one URL to the queue.")
             return
 
         destination = Path(self.destination_edit.text()).expanduser()
@@ -199,33 +259,47 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.current_urls = urls
+        next_index = self.next_waiting_index()
+        if next_index < 0:
+            QMessageBox.information(self, APP_NAME, "There are no waiting URLs in the queue.")
+            return
+
+        self.current_index = next_index
+        item = self.queue_items[self.current_index]
+        item.status = QueueItem.DOWNLOADING
+        self.refresh_queue_item(item)
+
         self.progress.setRange(0, 0)
         self.progress.setFormat("Downloading…")
-        self.status_label.setText(f"Downloading {len(urls)} queued URL(s)…")
+        self.status_label.setText(f"Downloading: {item.url}")
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+        self.cancelling = False
 
-        # The working directory is the selected destination. This means an existing
-        # gallery-dl config using base-directory "." behaves naturally.
         self.process.setWorkingDirectory(str(destination))
-
-        # One gallery-dl process handles the queue. This keeps ordering and output
-        # simple while the queue model is being built.
-        arguments = ["--verbose", *urls]
-        self.log_message(f"Starting gallery-dl with {len(urls)} URL(s)…")
-        self.process.start(engine, arguments)
+        self.log_message(f"Starting: {item.url}")
+        self.process.start(engine, ["--verbose", item.url])
 
         if not self.process.waitForStarted(3000):
+            item.status = QueueItem.FAILED
+            self.refresh_queue_item(item)
             self.log_message("ERROR: Failed to start gallery-dl.")
-            self.finish_download()
+            self.start_next_or_finish()
+
+    def next_waiting_index(self) -> int:
+        for index, item in enumerate(self.queue_items):
+            if item.status == QueueItem.WAITING:
+                return index
+        return -1
 
     def cancel_download(self) -> None:
         if self.process.state() == QProcess.ProcessState.NotRunning:
             return
 
+        self.cancelling = True
         self.log_message("Stopping gallery-dl…")
         self.process.terminate()
+
         if not self.process.waitForFinished(1500):
             self.process.kill()
 
@@ -240,16 +314,39 @@ class MainWindow(QMainWindow):
             self.log_message(data.rstrip())
 
     def process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        self.log_message(f"gallery-dl finished with exit code {exit_code}.")
-        if exit_status == QProcess.ExitStatus.CrashExit:
-            self.log_message("gallery-dl terminated unexpectedly.")
-        self.finish_download()
+        if self.current_index < 0:
+            return
 
-    def finish_download(self) -> None:
+        item = self.queue_items[self.current_index]
+
+        if self.cancelling:
+            item.status = QueueItem.CANCELLED
+        elif exit_status == QProcess.ExitStatus.CrashExit or exit_code != 0:
+            item.status = QueueItem.FAILED
+        else:
+            item.status = QueueItem.COMPLETED
+
+        self.refresh_queue_item(item)
+        self.log_message(
+            f"Finished: {item.url} — {item.status} (exit code {exit_code})"
+        )
+
+        self.start_next_or_finish()
+
+    def start_next_or_finish(self) -> None:
+        self.current_index = -1
+        self.cancelling = False
+
+        next_index = self.next_waiting_index()
+        if next_index >= 0:
+            self.download_button.setEnabled(True)
+            self.start_download()
+            return
+
         self.progress.setRange(0, 100)
-        self.progress.setValue(100 if self.process.exitCode() == 0 else 0)
-        self.progress.setFormat("Finished")
-        self.status_label.setText("Ready")
+        self.progress.setValue(100)
+        self.progress.setFormat("Complete")
+        self.status_label.setText("Queue finished")
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
 
