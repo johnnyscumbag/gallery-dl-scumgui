@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
 
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {item.url}")
-        self.process.start(engine, ["--verbose", item.url])
+        self.process.start(engine, ["-o", "output.mode=terminal", "-o", "output.ansi=false", item.url])
 
         if not self.process.waitForStarted(3000):
             item.status = QueueItem.FAILED
