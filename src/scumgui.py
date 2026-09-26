@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt
@@ -43,6 +44,11 @@ class QueueItem:
         self.url = url
         self.status = self.WAITING
         self.list_item: QListWidgetItem | None = None
+        self.downloaded = 0
+        self.skipped = 0
+        self.errors = 0
+        self.current_file = ""
+        self.started_at = 0.0
 
 
 def app_root() -> Path:
@@ -209,7 +215,12 @@ class MainWindow(QMainWindow):
         if item.list_item is None:
             return
 
-        item.list_item.setText(f"[{item.status}]  {item.url}")
+        stats = f"D:{item.downloaded}  S:{item.skipped}  E:{item.errors}"
+        if item.status == QueueItem.DOWNLOADING and item.current_file:
+            text = f"[{item.status}]  {stats}  {item.current_file}"
+        else:
+            text = f"[{item.status}]  {stats}  {item.url}"
+        item.list_item.setText(text)
 
         if item.status == QueueItem.COMPLETED:
             item.list_item.setForeground(QColor("green"))
@@ -285,14 +296,23 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setFormat("Downloading…")
-        self.status_label.setText(f"Downloading: {item.url}")
+        item.started_at = time.monotonic()
+        self.status_label.setText(f"Downloading: {item.url}  |  D:0  S:0  E:0")
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.cancelling = False
 
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {item.url}")
-        self.process.start(engine, ["-o", "output.mode=terminal", "-o", "output.ansi=false", item.url])
+        args = [
+            "-o", "output.mode=terminal",
+            "-o", "output.ansi=false",
+            "--Print", "after:[SCUMGUI_SUCCESS] {_path}",
+            "--Print", "skip:[SCUMGUI_SKIP] {_path}",
+            "--Print", "error:[SCUMGUI_ERROR] {_path}",
+            item.url,
+        ]
+        self.process.start(engine, args)
 
         if not self.process.waitForStarted(3000):
             item.status = QueueItem.FAILED
@@ -331,6 +351,9 @@ class MainWindow(QMainWindow):
         for line in data.replace("\r", "\n").splitlines():
             if not line:
                 continue
+            if self.consume_result_marker(line):
+                continue
+
             progress = parse_progress(line)
             if progress is not None:
                 self.progress.setValue(progress.percent)
@@ -339,6 +362,43 @@ class MainWindow(QMainWindow):
                 )
             else:
                 self.log_message(line)
+
+    def consume_result_marker(self, line: str) -> bool:
+        if self.current_index < 0:
+            return False
+
+        item = self.queue_items[self.current_index]
+        markers = (
+            ("[SCUMGUI_SUCCESS] ", "downloaded"),
+            ("[SCUMGUI_SKIP] ", "skipped"),
+            ("[SCUMGUI_ERROR] ", "errors"),
+        )
+        for marker, counter in markers:
+            if line.startswith(marker):
+                filename = line[len(marker):].strip()
+                setattr(item, counter, getattr(item, counter) + 1)
+                item.current_file = filename
+                self.refresh_queue_item(item)
+                self.update_current_item(item)
+                self.log_message(f"{counter.capitalize()}: {filename}")
+                return True
+        return False
+
+    def update_current_item(self, item: QueueItem) -> None:
+        elapsed = time.monotonic() - item.started_at if item.started_at else 0
+        minutes, seconds = divmod(int(elapsed), 60)
+        elapsed_text = f"{minutes:02d}:{seconds:02d}"
+        current = item.current_file or item.url
+        self.status_label.setText(
+            f"{current}  |  D:{item.downloaded}  S:{item.skipped}  E:{item.errors}  |  {elapsed_text}"
+        )
+
+    def queue_totals(self) -> tuple[int, int, int]:
+        return (
+            sum(item.downloaded for item in self.queue_items),
+            sum(item.skipped for item in self.queue_items),
+            sum(item.errors for item in self.queue_items),
+        )
 
     def process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         if self.current_index < 0:
@@ -354,8 +414,11 @@ class MainWindow(QMainWindow):
             item.status = QueueItem.COMPLETED
 
         self.refresh_queue_item(item)
+        elapsed = time.monotonic() - item.started_at if item.started_at else 0
         self.log_message(
-            f"Finished: {item.url} — {item.status} (exit code {exit_code})"
+            f"Finished: {item.url} — {item.status} "
+            f"(exit code {exit_code}, downloaded {item.downloaded}, "
+            f"skipped {item.skipped}, errors {item.errors}, elapsed {elapsed:.1f}s)"
         )
 
         self.start_next_or_finish()
@@ -373,7 +436,10 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
         self.progress.setFormat("Complete")
-        self.status_label.setText("Queue finished")
+        totals = self.queue_totals()
+        self.status_label.setText(
+            f"Queue finished  |  D:{totals[0]}  S:{totals[1]}  E:{totals[2]}"
+        )
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
 
