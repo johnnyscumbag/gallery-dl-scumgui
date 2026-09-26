@@ -386,14 +386,18 @@ class MainWindow(QMainWindow):
 
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {item.destination}  —  {item.url}")
-        args = [
+        args = []
+        scumgui_config = resource_path("Resources/scumgui-gallery-dl.json")
+        if scumgui_config.is_file():
+            args.extend(["--config-json", str(scumgui_config)])
+        args.extend([
             "-o", "output.mode=terminal",
             "-o", "output.ansi=false",
             "--Print", "after:[SCUMGUI_SUCCESS] {_path}",
             "--Print", "skip:[SCUMGUI_SKIP] {_path}",
             "--Print", "error:[SCUMGUI_ERROR] {_path}",
             item.url,
-        ]
+        ])
         self.process.start(engine, args)
 
         if not self.process.waitForStarted(3000):
