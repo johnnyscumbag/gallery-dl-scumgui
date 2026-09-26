@@ -320,17 +320,6 @@ class MainWindow(QMainWindow):
         if self.process.state() != QProcess.ProcessState.NotRunning:
             return
 
-        destination = Path(self.destination_edit.text()).expanduser()
-        try:
-            destination.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            QMessageBox.warning(
-                self,
-                APP_NAME,
-                f"Could not create the destination folder:\n{destination}\n\n{exc}",
-            )
-            return
-
         engine = find_gallery_dl()
         if not engine:
             QMessageBox.warning(
