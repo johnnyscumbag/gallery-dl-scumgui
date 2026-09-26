@@ -142,6 +142,12 @@ class MainWindow(QMainWindow):
         self.queue.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         queue_layout.addWidget(self.queue)
 
+        self.queue_progress = QProgressBar()
+        self.queue_progress.setRange(0, 1)
+        self.queue_progress.setValue(0)
+        self.queue_progress.setFormat("Queue: 0 / 0")
+        queue_layout.addWidget(self.queue_progress)
+
         controls = QGridLayout()
 
         remove_button = QPushButton("Remove Selected")
@@ -208,6 +214,7 @@ class MainWindow(QMainWindow):
         self.refresh_queue_item(item)
 
         self.url_edit.clear()
+        self.update_queue_progress()
         self.log_message(f"Added: {url}")
 
     def refresh_queue_item(self, item: QueueItem) -> None:
@@ -243,6 +250,7 @@ class MainWindow(QMainWindow):
         self.queue_items = [item for item in self.queue_items if item.list_item not in selected]
         for list_item in selected:
             self.queue.takeItem(self.queue.row(list_item))
+        self.update_queue_progress()
 
     def clear_finished(self) -> None:
         if self.process.state() != QProcess.ProcessState.NotRunning:
@@ -259,6 +267,7 @@ class MainWindow(QMainWindow):
                 if item.list_item is not None:
                     self.queue.takeItem(self.queue.row(item.list_item))
                 self.queue_items.remove(item)
+        self.update_queue_progress()
 
     def choose_destination(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -266,6 +275,24 @@ class MainWindow(QMainWindow):
         )
         if folder:
             self.destination_edit.setText(folder)
+
+    def update_queue_progress(self) -> None:
+        total = len(self.queue_items)
+        finished = sum(
+            item.status in {
+                QueueItem.COMPLETED,
+                QueueItem.COMPLETED_WITH_ERRORS,
+                QueueItem.FAILED,
+                QueueItem.CANCELLED,
+            }
+            for item in self.queue_items
+        )
+
+        self.queue_progress.setRange(0, max(total, 1))
+        self.queue_progress.setValue(finished)
+        self.queue_progress.setFormat(
+            f"Queue: {finished} / {total}" if total else "Queue: 0 / 0"
+        )
 
     def start_download(self) -> None:
         if self.process.state() != QProcess.ProcessState.NotRunning:
@@ -292,6 +319,7 @@ class MainWindow(QMainWindow):
 
         self.current_index = next_index
         item = self.queue_items[self.current_index]
+        self.update_queue_progress()
         item.status = QueueItem.DOWNLOADING
         self.refresh_queue_item(item)
 
@@ -423,6 +451,7 @@ class MainWindow(QMainWindow):
             item.status = QueueItem.FAILED
 
         self.refresh_queue_item(item)
+        self.update_queue_progress()
         elapsed = time.monotonic() - item.started_at if item.started_at else 0
         self.log_message(
             f"Finished: {item.url} — {item.status} "
