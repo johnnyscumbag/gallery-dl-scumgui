@@ -50,14 +50,18 @@ jobs:
           --noconfirm
           --clean
           --onedir
-          --contents-directory "."
           --windowed
           --name ScumGUI
           --icon assets/scumgui.ico
           --add-data "assets;assets"
-          --add-binary "gallery-dl/gallery-dl.exe;Resources"
           --paths src
           src/scumgui.py
+
+      - name: Place gallery-dl engine
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/ScumGUI/Resources" | Out-Null
+          Copy-Item "gallery-dl/gallery-dl.exe" "dist/ScumGUI/Resources/gallery-dl.exe"
 
       - name: Upload executable
         uses: actions/upload-artifact@v7
