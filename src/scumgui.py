@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
         self.download_button.clicked.connect(self.start_download)
         controls.addWidget(self.download_button, 0, 3)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton("Cancel Current")
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self.cancel_download)
         controls.addWidget(self.cancel_button, 0, 4)
