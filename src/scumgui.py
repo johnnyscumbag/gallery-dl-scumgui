@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QColor
+from progress import parse_progress
+
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -269,7 +271,8 @@ class MainWindow(QMainWindow):
         item.status = QueueItem.DOWNLOADING
         self.refresh_queue_item(item)
 
-        self.progress.setRange(0, 0)
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
         self.progress.setFormat("Downloading…")
         self.status_label.setText(f"Downloading: {item.url}")
         self.download_button.setEnabled(False)
@@ -306,12 +309,22 @@ class MainWindow(QMainWindow):
     def read_stdout(self) -> None:
         data = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
         if data:
-            self.log_message(data.rstrip())
+            self.consume_output(data)
 
     def read_stderr(self) -> None:
         data = bytes(self.process.readAllStandardError()).decode("utf-8", errors="replace")
         if data:
-            self.log_message(data.rstrip())
+            self.consume_output(data)
+
+    def consume_output(self, data: str) -> None:
+        for line in data.splitlines():
+            if not line:
+                continue
+            progress = parse_progress(line)
+            if progress is not None:
+                self.progress.setValue(progress.percent)
+                self.progress.setFormat(str(progress.current) + "/" + str(progress.total) + " (" + str(progress.percent) + "%)")
+            self.log_message(line)
 
     def process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         if self.current_index < 0:
