@@ -49,12 +49,13 @@ jobs:
           python -m PyInstaller
           --noconfirm
           --clean
-          --onefile
+          --onedir
+          --contents-directory "."
           --windowed
           --name ScumGUI
           --icon assets/scumgui.ico
           --add-data "assets;assets"
-          --add-binary "gallery-dl/gallery-dl.exe;gallery-dl"
+          --add-binary "gallery-dl/gallery-dl.exe;Resources"
           --paths src
           src/scumgui.py
 
@@ -62,5 +63,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ScumGUI-windows-x64
-          path: dist/ScumGUI.exe
+          path: dist/ScumGUI
           if-no-files-found: error
