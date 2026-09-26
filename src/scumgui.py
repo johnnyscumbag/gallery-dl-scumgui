@@ -430,7 +430,7 @@ class MainWindow(QMainWindow):
 
     def consume_gallery_log(self, line: str) -> bool:
         match = re.match(
-            r"^\\[(?P<logger>[^]]+)\\]\\[(?P<level>warning|error|info)\\]\\s+(?P<message>.*)$",
+            r"^\[(?P<logger>[^]]+)\]\[(?P<level>warning|error|info)\]\s+(?P<message>.*)$",
             line,
             re.IGNORECASE,
         )
@@ -442,8 +442,8 @@ class MainWindow(QMainWindow):
         item = self.queue_items[self.current_index] if self.current_index >= 0 else None
 
         timeout = re.search(
-            r"ConnectTimeoutError: Connection to (?P<host>[^ ]+) timed out\\. "
-            r"\\((?P<attempt>\\d+)/(?P<total>\\d+)\\)",
+            r"ConnectTimeoutError: Connection to (?P<host>[^ ]+) timed out\. "
+            r"\((?P<attempt>\d+)/(?P<total>\d+)\)",
             message,
         )
         if timeout:
@@ -459,7 +459,7 @@ class MainWindow(QMainWindow):
             return True
 
         not_found = re.search(
-            r"(?P<code>\\d{3}) (?P<reason>[^:]+?) for (?P<url>https?://\\S+)",
+            r"(?P<code>\d{3}) (?P<reason>[^:]+?) for (?P<url>https?://\S+)",
             message,
         )
         if not_found and not_found.group("code") == "404":
