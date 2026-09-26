@@ -1,15 +1,43 @@
 {
     "extractor": {
         "base-directory": ".",
-        "directory": {
-            "extension in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'svg')": [
-                "Photos"
-            ],
-            "extension in ('mp4', 'webm', 'mkv', 'mov', 'avi', 'flv', 'ogv', 'mpg', 'mpeg', '3gp', 'vob', 'wmv', 'm4v')": [
-                "Videos"
-            ],
-            "": []
-        },
-        "skip": "enumerate"
+        "directory": [],
+        "skip": "enumerate",
+        "postprocessors": [
+            {
+                "name": "classify",
+                "mapping": {
+                    "Photos": [
+                        "jpg",
+                        "jpeg",
+                        "png",
+                        "gif",
+                        "webp",
+                        "avif",
+                        "bmp",
+                        "tif",
+                        "tiff",
+                        "heic",
+                        "heif",
+                        "svg"
+                    ],
+                    "Videos": [
+                        "mp4",
+                        "webm",
+                        "mkv",
+                        "mov",
+                        "avi",
+                        "flv",
+                        "ogv",
+                        "mpg",
+                        "mpeg",
+                        "3gp",
+                        "vob",
+                        "wmv",
+                        "m4v"
+                    ]
+                }
+            }
+        ]
     }
 }
