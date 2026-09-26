@@ -456,10 +456,15 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def is_redundant_gallery_output(line: str) -> bool:
-        # gallery-dl's terminal output uses "* <path>" for completed files.
-        # ScumGUI already receives a cleaner --Print event marker, so suppress
-        # the duplicate terminal status line.
-        return bool(re.match(r"^\*\s+.+$", line.strip()))
+        # gallery-dl's terminal output emits its own start/success path
+        # lines. ScumGUI already receives cleaner --Print event markers, so
+        # suppress both the "* <path>" success line and the ".\\<path>"
+        # start line.
+        stripped = line.strip()
+        return bool(
+            re.match(r"^\*\s+.+$", stripped)
+            or re.match(r"^\.\\.+$", stripped)
+        )
 
     def consume_gallery_log(self, line: str) -> bool:
         match = re.match(
