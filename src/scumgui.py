@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 import time
@@ -407,6 +408,9 @@ class MainWindow(QMainWindow):
             if self.consume_result_marker(line):
                 continue
 
+            if self.is_redundant_gallery_output(line):
+                continue
+
             progress = parse_progress(line)
             if progress is not None:
                 self.progress.setValue(progress.percent)
@@ -415,6 +419,13 @@ class MainWindow(QMainWindow):
                 )
             else:
                 self.log_message(line)
+
+    @staticmethod
+    def is_redundant_gallery_output(line: str) -> bool:
+        # gallery-dl's terminal output can echo the target path after our
+        # --Print event marker. Keep the ScumGUI event line and suppress the
+        # duplicate path-only output.
+        return bool(re.fullmatch(r"[*.]\\.*", line.strip()))
 
     def consume_result_marker(self, line: str) -> bool:
         if self.current_index < 0:
@@ -434,11 +445,11 @@ class MainWindow(QMainWindow):
                 self.refresh_queue_item(item)
                 self.update_current_item(item)
                 if counter == "downloaded":
-                    self.log_event("✓", "green", f"Downloaded: {filename}")
+                    self.log_event("✓", "green", filename)
                 elif counter == "skipped":
-                    self.log_event("⚠", "orange", f"Skipped: {filename}")
+                    self.log_event("⚠", "orange", filename)
                 else:
-                    self.log_event("✗", "red", f"Failed: {filename}")
+                    self.log_event("✗", "red", filename)
                 return True
         return False
 
