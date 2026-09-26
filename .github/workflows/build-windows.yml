@@ -32,6 +32,18 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Download gallery-dl engine
+        shell: pwsh
+        run: |
+          $version = "1.32.13"
+          $url = "https://github.com/mikf/gallery-dl/releases/download/v$version/gallery-dl.exe"
+          New-Item -ItemType Directory -Force -Path gallery-dl | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "gallery-dl/gallery-dl.exe"
+          & "gallery-dl/gallery-dl.exe" --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "The bundled gallery-dl executable failed its version check."
+          }
+
       - name: Build executable
         run: >
           python -m PyInstaller
@@ -42,6 +54,7 @@ jobs:
           --name ScumGUI
           --icon assets/scumgui.ico
           --add-data "assets;assets"
+          --add-binary "gallery-dl/gallery-dl.exe;gallery-dl"
           --paths src
           src/scumgui.py
 
