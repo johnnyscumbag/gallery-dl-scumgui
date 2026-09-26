@@ -40,6 +40,8 @@ jobs:
           --onefile
           --windowed
           --name ScumGUI
+          --icon assets/scumgui.ico
+          --add-data "assets;assets"
           --paths src
           src/scumgui.py
 
