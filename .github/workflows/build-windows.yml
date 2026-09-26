@@ -54,7 +54,6 @@ jobs:
           --name ScumGUI
           --icon assets/scumgui.ico
           --add-data "assets;assets"
-          --add-data "Resources/scumgui-gallery-dl.json;Resources"
           --paths src
           src/scumgui.py
 
@@ -63,6 +62,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist/ScumGUI/Resources" | Out-Null
           Copy-Item "gallery-dl/gallery-dl.exe" "dist/ScumGUI/Resources/gallery-dl.exe"
+          Copy-Item "Resources/scumgui-gallery-dl.json" "dist/ScumGUI/Resources/scumgui-gallery-dl.json"
           if (-not (Test-Path "dist/ScumGUI/Resources/scumgui-gallery-dl.json")) {
             throw "The ScumGUI gallery-dl configuration was not included in the build."
           }
