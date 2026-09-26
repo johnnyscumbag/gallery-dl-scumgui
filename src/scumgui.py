@@ -89,10 +89,16 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(resource_path("assets/scumgui.ico"))))
         self.resize(980, 720)
 
+        settings_path = app_root() / "ScumGUI.ini"
+        settings_exists = settings_path.is_file()
         self.settings = QSettings(
-            str(app_root() / "ScumGUI.ini"),
+            str(settings_path),
             QSettings.Format.IniFormat,
         )
+
+        if not settings_exists:
+            self.settings.setValue("base_folder", "M:\\Blah")
+            self.settings.sync()
 
         self.process = QProcess(self)
         self.process.readyReadStandardOutput.connect(self.read_stdout)
