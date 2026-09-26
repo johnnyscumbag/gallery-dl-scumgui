@@ -65,6 +65,7 @@ def find_gallery_dl() -> str | None:
     root = app_root()
 
     for candidate in (
+        root / "Resources" / "gallery-dl.exe",
         resource_path("gallery-dl/gallery-dl.exe"),
         root / "gallery-dl" / "gallery-dl.exe",
         root / "gallery-dl.exe",
