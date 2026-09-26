@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 
-APP_NAME = "gallery-dl ScumGUI"
+APP_NAME = "ScumGUI"
 
 
 class QueueItem:
