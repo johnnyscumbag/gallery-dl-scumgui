@@ -13,7 +13,6 @@ from progress import parse_progress
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
-    QFileDialog,
     QGridLayout,
     QGroupBox,
     QLabel,
@@ -43,8 +42,9 @@ class QueueItem:
     FAILED = "Failed"
     CANCELLED = "Cancelled"
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, destination: str) -> None:
         self.url = url
+        self.destination = destination
         self.status = self.WAITING
         self.list_item: QListWidgetItem | None = None
         self.downloaded = 0
@@ -129,17 +129,9 @@ class MainWindow(QMainWindow):
         input_grid.addWidget(self.add_button, 0, 3)
 
         input_grid.addWidget(QLabel("Destination"), 1, 0)
-        if not self.settings.contains("base_folder"):
-            self.settings.setValue("base_folder", "M:\\Blah")
-            self.settings.sync()
-
-        default_destination = self.settings.value("base_folder", "M:\\Blah")
-        self.destination_edit = QLineEdit(str(default_destination))
-        input_grid.addWidget(self.destination_edit, 1, 1, 1, 2)
-
-        browse_button = QPushButton("Browse…")
-        browse_button.clicked.connect(self.choose_destination)
-        input_grid.addWidget(browse_button, 1, 3)
+        self.destination_edit = QLineEdit()
+        self.destination_edit.setPlaceholderText("Folder name, e.g. emily.deann")
+        input_grid.addWidget(self.destination_edit, 1, 1, 1, 3)
 
         input_grid.addWidget(QLabel("Profile"), 2, 0)
         self.profile_combo = QComboBox()
@@ -224,7 +216,25 @@ class MainWindow(QMainWindow):
         if not url:
             return
 
-        item = QueueItem(url)
+        destination = self.destination_edit.text().strip()
+        if not destination:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "Enter a destination folder name before adding the URL.",
+            )
+            return
+
+        destination_path = Path(destination)
+        if destination_path.is_absolute() or ".." in destination_path.parts:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "The destination must be a relative folder name inside the configured base folder.",
+            )
+            return
+
+        item = QueueItem(url, destination)
         self.queue_items.append(item)
 
         list_item = QListWidgetItem()
@@ -234,7 +244,7 @@ class MainWindow(QMainWindow):
 
         self.url_edit.clear()
         self.update_queue_progress()
-        self.log_message(f"Added: {url}")
+        self.log_message(f"Added: {destination}  —  {url}")
 
     def refresh_queue_item(self, item: QueueItem) -> None:
         if item.list_item is None:
@@ -242,9 +252,9 @@ class MainWindow(QMainWindow):
 
         stats = f"D:{item.downloaded}  S:{item.skipped}  E:{item.errors}"
         if item.status == QueueItem.DOWNLOADING and item.current_file:
-            text = f"[{item.status}]  {stats}  {item.current_file}"
+            text = f"[{item.status}]  {stats}  {item.destination}  —  {item.current_file}"
         else:
-            text = f"[{item.status}]  {stats}  {item.url}"
+            text = f"[{item.status}]  {stats}  {item.destination}  —  {item.url}"
         item.list_item.setText(text)
 
         if item.status == QueueItem.COMPLETED:
@@ -287,13 +297,6 @@ class MainWindow(QMainWindow):
                     self.queue.takeItem(self.queue.row(item.list_item))
                 self.queue_items.remove(item)
         self.update_queue_progress()
-
-    def choose_destination(self) -> None:
-        folder = QFileDialog.getExistingDirectory(
-            self, "Choose download destination", self.destination_edit.text()
-        )
-        if folder:
-            self.destination_edit.setText(folder)
 
     def update_queue_progress(self) -> None:
         total = len(self.queue_items)
@@ -344,6 +347,21 @@ class MainWindow(QMainWindow):
 
         self.current_index = next_index
         item = self.queue_items[self.current_index]
+
+        base_folder = Path(
+            self.settings.value("base_folder", "M:\\Blah")
+        ).expanduser()
+        destination = base_folder / item.destination
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                f"Could not create the destination folder:\n{destination}\n\n{exc}",
+            )
+            self.current_index = -1
+            return
         self.update_queue_progress()
         item.status = QueueItem.DOWNLOADING
         self.refresh_queue_item(item)
@@ -352,13 +370,13 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.progress.setFormat("Downloading…")
         item.started_at = time.monotonic()
-        self.status_label.setText(f"Downloading: {item.url}  |  D:0  S:0  E:0")
+        self.status_label.setText(f"Downloading: {item.destination}  —  {item.url}  |  D:0  S:0  E:0")
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.cancelling = False
 
         self.process.setWorkingDirectory(str(destination))
-        self.log_message(f"Starting: {item.url}")
+        self.log_message(f"Starting: {item.destination}  —  {item.url}")
         args = [
             "-o", "output.mode=terminal",
             "-o", "output.ansi=false",
