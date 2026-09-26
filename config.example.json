@@ -1,0 +1,15 @@
+{
+    "extractor": {
+        "base-directory": ".",
+        "directory": {
+            "extension in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'svg')": [
+                "Photos"
+            ],
+            "extension in ('mp4', 'webm', 'mkv', 'mov', 'avi', 'flv', 'ogv', 'mpg', "mpeg", "3gp", "vob", "wmv", "m4v")": [
+                "Videos"
+            ],
+            "": []
+        },
+        "skip": "enumerate"
+    }
+}
