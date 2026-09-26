@@ -90,13 +90,9 @@ class MainWindow(QMainWindow):
         self.resize(980, 720)
 
         self.settings = QSettings(
+            str(app_root() / "ScumGUI.ini"),
             QSettings.Format.IniFormat,
-            QSettings.Scope.IniFormat,
-            APP_NAME,
-            APP_NAME,
         )
-        if getattr(sys, "frozen", False):
-            self.settings.setFileName(str(app_root() / "ScumGUI.ini"))
 
         self.process = QProcess(self)
         self.process.readyReadStandardOutput.connect(self.read_stdout)
