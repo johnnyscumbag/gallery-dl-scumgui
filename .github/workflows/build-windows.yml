@@ -46,7 +46,7 @@ jobs:
           src/scumgui.py
 
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ScumGUI-windows-x64
           path: dist/ScumGUI.exe
