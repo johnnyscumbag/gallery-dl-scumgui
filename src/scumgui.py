@@ -317,14 +317,17 @@ class MainWindow(QMainWindow):
             self.consume_output(data)
 
     def consume_output(self, data: str) -> None:
-        for line in data.splitlines():
+        for line in data.replace("\r", "\n").splitlines():
             if not line:
                 continue
             progress = parse_progress(line)
             if progress is not None:
                 self.progress.setValue(progress.percent)
-                self.progress.setFormat(str(progress.current) + "/" + str(progress.total) + " (" + str(progress.percent) + "%)")
-            self.log_message(line)
+                self.progress.setFormat(
+                    str(progress.percent) + "%  " + progress.downloaded + "  " + progress.speed
+                )
+            else:
+                self.log_message(line)
 
     def process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         if self.current_index < 0:
