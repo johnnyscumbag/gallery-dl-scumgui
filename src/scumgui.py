@@ -121,10 +121,11 @@ class MainWindow(QMainWindow):
         input_grid.addWidget(self.add_button, 0, 3)
 
         input_grid.addWidget(QLabel("Destination"), 1, 0)
-        default_destination = self.settings.value(
-            "base_folder",
-            str(Path.home() / "Downloads"),
-        )
+        if not self.settings.contains("base_folder"):
+            self.settings.setValue("base_folder", "M:\\Blah")
+            self.settings.sync()
+
+        default_destination = self.settings.value("base_folder", "M:\\Blah")
         self.destination_edit = QLineEdit(str(default_destination))
         input_grid.addWidget(self.destination_edit, 1, 1, 1, 2)
 
