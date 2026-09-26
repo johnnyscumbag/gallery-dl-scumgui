@@ -36,7 +36,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "1.32.13"
-          $url = "https://github.com/mikf/gallery-dl/releases/download/v$version/gallery-dl.exe"
+          $url = "https://codeberg.org/mikf/gallery-dl/releases/download/v$version/gallery-dl.exe"
           New-Item -ItemType Directory -Force -Path gallery-dl | Out-Null
           Invoke-WebRequest -Uri $url -OutFile "gallery-dl/gallery-dl.exe"
           & "gallery-dl/gallery-dl.exe" --version
