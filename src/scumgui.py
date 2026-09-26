@@ -51,7 +51,9 @@ class QueueItem:
         self.skipped = 0
         self.errors = 0
         self.current_file = ""
-        self.last_error_reason = ""
+        # Holds the most recent file-level failure reason until gallery-dl's
+        # --Print error event gives us the corresponding filename.
+        self.pending_error_reason = ""
         self.started_at = 0.0
 
 
@@ -353,6 +355,7 @@ class MainWindow(QMainWindow):
 
         self.current_index = next_index
         item = self.queue_items[self.current_index]
+        item.pending_error_reason = ""
 
         base_folder = Path(
             self.settings.value("base_folder", "M:\\Blah")
@@ -447,10 +450,10 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def is_redundant_gallery_output(line: str) -> bool:
-        # gallery-dl's terminal output can echo the target path after our
-        # --Print event marker. Keep the ScumGUI event line and suppress the
-        # duplicate path-only output.
-        return bool(re.fullmatch(r"[*.]\\.*", line.strip()))
+        # gallery-dl's terminal output uses "* <path>" for completed files.
+        # ScumGUI already receives a cleaner --Print event marker, so suppress
+        # the duplicate terminal status line.
+        return bool(re.match(r"^\\*\\s+.+$", line.strip()))
 
     def consume_gallery_log(self, line: str) -> bool:
         match = re.match(
@@ -476,7 +479,7 @@ class MainWindow(QMainWindow):
                 f"retry {timeout.group('attempt')}/{timeout.group('total')}"
             )
             if item is not None:
-                item.last_error_reason = (
+                item.pending_error_reason = (
                     f"connection timeout after {timeout.group('total')} retries"
                 )
             self.log_event("⚠", "orange", reason)
@@ -491,13 +494,13 @@ class MainWindow(QMainWindow):
             host = url.split("/", 3)[2] if "://" in url else url
             reason = f"404 Not Found — {host}"
             if item is not None:
-                item.last_error_reason = "404 Not Found"
+                item.pending_error_reason = "404 Not Found"
             self.log_event("⚠", "orange", reason)
             return True
 
         if level == "error" and message.lower().startswith("failed to download"):
-            if item is not None and not item.last_error_reason:
-                item.last_error_reason = "download failed"
+            if item is not None and not item.pending_error_reason:
+                item.pending_error_reason = "download failed"
             return True
 
         if level == "warning":
@@ -506,7 +509,7 @@ class MainWindow(QMainWindow):
 
         if level == "error":
             if item is not None:
-                item.last_error_reason = message
+                item.pending_error_reason = message
             self.log_event("✗", "red", message)
             return True
 
@@ -534,10 +537,13 @@ class MainWindow(QMainWindow):
                 elif counter == "skipped":
                     self.log_event("⚠", "orange", filename)
                 else:
-                    reason = item.last_error_reason
+                    reason = item.pending_error_reason
                     message = f"{filename} — {reason}" if reason else filename
                     self.log_event("✗", "red", message)
-                item.last_error_reason = ""
+                    # Only an actual file-level error consumes the pending
+                    # reason. Successful/skipped files must not wipe out a
+                    # reason reported just before their error marker arrives.
+                    item.pending_error_reason = ""
                 return True
         return False
 
