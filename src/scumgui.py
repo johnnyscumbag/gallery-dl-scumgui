@@ -453,7 +453,7 @@ class MainWindow(QMainWindow):
         # gallery-dl's terminal output uses "* <path>" for completed files.
         # ScumGUI already receives a cleaner --Print event marker, so suppress
         # the duplicate terminal status line.
-        return bool(re.match(r"^\\*\\s+.+$", line.strip()))
+        return bool(re.match(r"^\*\s+.+$", line.strip()))
 
     def consume_gallery_log(self, line: str) -> bool:
         match = re.match(
