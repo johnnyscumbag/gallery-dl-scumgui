@@ -382,7 +382,7 @@ class MainWindow(QMainWindow):
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setStyle("Fusion")
+    app.setStyle("windows11")
 
     window = MainWindow()
     window.show()
