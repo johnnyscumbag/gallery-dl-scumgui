@@ -418,10 +418,12 @@ class MainWindow(QMainWindow):
 
         self.cancelling = True
         self.log_message("Stopping gallery-dl…")
-        self.process.terminate()
-
-        if not self.process.waitForFinished(1500):
-            self.process.kill()
+        # gallery-dl is a Windows console application. QProcess.terminate()
+        # sends WM_CLOSE on Windows, which console applications may not handle.
+        # kill() uses TerminateProcess, so use it for a reliable immediate
+        # cancellation.
+        self.process.kill()
+        self.process.waitForFinished(1500)
 
     def read_stdout(self) -> None:
         data = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
