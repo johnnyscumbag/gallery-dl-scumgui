@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon
 from progress import parse_progress
 
 from PySide6.QtWidgets import (
@@ -53,7 +53,7 @@ def app_root() -> Path:
     )
 
 
-def find_gallery_dl() -> str | None:
+def resource_path(relative_path: str) -> Path:\n    if getattr(sys, "frozen", False):\n        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)) / relative_path\n    return app_root() / relative_path\n\n\ndef find_gallery_dl() -> str | None:
     root = app_root()
 
     for candidate in (
