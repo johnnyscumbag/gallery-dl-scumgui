@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -408,28 +409,54 @@ class MainWindow(QMainWindow):
         return -1
 
     def terminate_gallery_process(self) -> None:
-        pid = int(self.process.processId())
-        if not pid:
+        target = Path(find_gallery_dl() or "").resolve()
+        if not target.is_file():
             self.process.kill()
             self.process.waitForFinished(1500)
             return
 
-        try:
-            # Windows taskkill /T terminates the process and its child
-            # processes. This is more reliable for gallery-dl than relying
-            # on QProcess.kill() alone when child activity is still running.
-            subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        finally:
-            self.process.waitForFinished(3000)
-            if self.process.state() != QProcess.ProcessState.NotRunning:
-                self.process.kill()
-                self.process.waitForFinished(1000)
+        # gallery-dl can create more than one process for a single run.
+        # Find only the bundled ScumGUI executable by its full path, so
+        # independently launched gallery-dl processes are never touched.
+        env = os.environ.copy()
+        env["SCUMGUI_GALLERY_PATH"] = str(target)
+
+        ps_script = r"""
+$target = $env:SCUMGUI_GALLERY_PATH
+$processes = @(Get-CimInstance Win32_Process -Filter "Name='gallery-dl.exe'" |
+    Where-Object {
+        $_.ExecutablePath -and
+        ([IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target)
+    } |
+    Select-Object ProcessId, ParentProcessId)
+
+if ($processes.Count -gt 0) {
+    $ids = @($processes | ForEach-Object { [int]$_.ProcessId })
+    $roots = @($processes | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
+
+    if ($roots.Count -eq 0) {
+        $roots = $processes
+    }
+
+    $roots | ForEach-Object {
+        & taskkill.exe /PID $_.ProcessId /T /F *> $null
+    }
+}
+"""
+
+        subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
+        self.process.waitForFinished(3000)
+        if self.process.state() != QProcess.ProcessState.NotRunning:
+            self.process.kill()
+            self.process.waitForFinished(1000)
 
     def cancel_download(self) -> None:
         if self.process.state() == QProcess.ProcessState.NotRunning:
