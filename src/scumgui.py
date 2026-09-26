@@ -12,7 +12,6 @@ from progress import parse_progress
 
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QGridLayout,
     QGroupBox,
     QLabel,
@@ -24,7 +23,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
