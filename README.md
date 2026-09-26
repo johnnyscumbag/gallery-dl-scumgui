@@ -1,4 +1,4 @@
-# gallery-dl ScumGUI
+# ScumGUI
 
 A Windows desktop GUI frontend for [gallery-dl](https://github.com/mikf/gallery-dl).
 
@@ -6,14 +6,18 @@ A Windows desktop GUI frontend for [gallery-dl](https://github.com/mikf/gallery-
 
 Early development. ScumGUI can now:
 
-- Queue URLs
-- Select a destination
-- Locate a bundled `gallery-dl.exe` or fall back to the system PATH
+- Queue multiple URLs
+- Select a download destination
+- Locate a bundled `gallery-dl.exe` in `Resources\\`
+- Fall back to a system `gallery-dl` on PATH
 - Launch gallery-dl without freezing the GUI
-- Capture stdout/stderr into the built-in log
+- Show live download progress
+- Track downloaded, skipped, and failed files for each queue item
+- Show queue-wide result totals
+- Capture gallery-dl diagnostics in the built-in log
 - Cancel a running gallery-dl process
 
-The bundled engine/update system and richer queue/progress handling are planned next.
+ScumGUI intentionally delegates downloading to gallery-dl instead of reimplementing its extraction and download logic.
 
 ## Development
 
@@ -30,5 +34,3 @@ Run:
 ```powershell
 py src\scumgui.py
 ```
-
-ScumGUI intentionally delegates downloading to gallery-dl instead of reimplementing extraction logic.
