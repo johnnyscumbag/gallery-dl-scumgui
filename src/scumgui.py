@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSpinBox,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -186,9 +187,9 @@ class MainWindow(QMainWindow):
         log_box = QGroupBox("Log")
         log_layout = QVBoxLayout(log_box)
 
-        self.log = QPlainTextEdit()
+        self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.log.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         log_layout.addWidget(self.log)
 
         layout.addWidget(log_box, 1)
@@ -410,7 +411,12 @@ class MainWindow(QMainWindow):
                 item.current_file = filename
                 self.refresh_queue_item(item)
                 self.update_current_item(item)
-                self.log_message(f"{counter.capitalize()}: {filename}")
+                if counter == "downloaded":
+                    self.log_event("✓", "green", f"Downloaded: {filename}")
+                elif counter == "skipped":
+                    self.log_event("⚠", "orange", f"Skipped: {filename}")
+                else:
+                    self.log_event("✗", "red", f"Failed: {filename}")
                 return True
         return False
 
@@ -484,8 +490,25 @@ class MainWindow(QMainWindow):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
 
+    def log_event(self, glyph: str, color: str, message: str) -> None:
+        cursor = self.log.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+
+        glyph_format = cursor.charFormat()
+        glyph_format.setForeground(QColor(color))
+        glyph_format.setFontWeight(700)
+        cursor.insertText(glyph + " ", glyph_format)
+
+        text_format = cursor.charFormat()
+        text_format.setForeground(self.palette().text().color())
+        text_format.setFontWeight(400)
+        cursor.insertText(message + "\n", text_format)
+
+        self.log.setTextCursor(cursor)
+        self.log.ensureCursorVisible()
+
     def log_message(self, message: str) -> None:
-        self.log.appendPlainText(message)
+        self.log_event("", self.palette().text().color().name(), message)
 
 
 def main() -> int:
