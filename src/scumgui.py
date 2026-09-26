@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {item.destination}  —  {item.url}")
         args = []
-        scumgui_config = resource_path("Resources/scumgui-gallery-dl.json")
+        scumgui_config = app_root() / "Resources" / "scumgui-gallery-dl.json"
         if scumgui_config.is_file():
             args.extend(["--config-json", str(scumgui_config)])
         args.extend([
