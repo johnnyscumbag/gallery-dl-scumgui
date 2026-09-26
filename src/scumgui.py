@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -406,18 +407,37 @@ class MainWindow(QMainWindow):
                 return index
         return -1
 
+    def terminate_gallery_process(self) -> None:
+        pid = int(self.process.processId())
+        if not pid:
+            self.process.kill()
+            self.process.waitForFinished(1500)
+            return
+
+        try:
+            # Windows taskkill /T terminates the process and its child
+            # processes. This is more reliable for gallery-dl than relying
+            # on QProcess.kill() alone when child activity is still running.
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        finally:
+            self.process.waitForFinished(3000)
+            if self.process.state() != QProcess.ProcessState.NotRunning:
+                self.process.kill()
+                self.process.waitForFinished(1000)
+
     def cancel_download(self) -> None:
         if self.process.state() == QProcess.ProcessState.NotRunning:
             return
 
         self.cancelling = True
         self.log_message("Stopping gallery-dl…")
-        # gallery-dl is a Windows console application. QProcess.terminate()
-        # sends WM_CLOSE on Windows, which console applications may not handle.
-        # kill() uses TerminateProcess, so use it for a reliable immediate
-        # cancellation.
-        self.process.kill()
-        self.process.waitForFinished(1500)
+        self.terminate_gallery_process()
 
     def cancel_all(self) -> None:
         if self.process.state() == QProcess.ProcessState.NotRunning:
@@ -440,8 +460,7 @@ class MainWindow(QMainWindow):
         # Do not start another gallery-dl process after this one exits.
         # Waiting items are cancelled before their destination folders are
         # created, so Cancel All cannot leave a trail of empty folders.
-        self.process.kill()
-        self.process.waitForFinished(1500)
+        self.terminate_gallery_process()
 
     def read_stdout(self) -> None:
         data = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
