@@ -199,6 +199,35 @@ class MainWindow(QMainWindow):
         self.queue.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.queue.setAlternatingRowColors(True)
         self.queue.setUniformItemSizes(False)
+
+        queue_palette = self.queue.palette()
+        queue_palette.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Highlight,
+            QColor("#404040"),
+        )
+        queue_palette.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.HighlightedText,
+            queue_palette.color(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.Text,
+            ),
+        )
+        queue_palette.setColor(
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorRole.Highlight,
+            QColor("#383838"),
+        )
+        queue_palette.setColor(
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorRole.HighlightedText,
+            queue_palette.color(
+                QPalette.ColorGroup.Inactive,
+                QPalette.ColorRole.Text,
+            ),
+        )
+        self.queue.setPalette(queue_palette)
         queue_layout.addWidget(self.queue, 1)
 
         self.queue_progress = QProgressBar()
@@ -283,13 +312,6 @@ class MainWindow(QMainWindow):
             }}
             QLineEdit, QListWidget, QTextEdit {{
                 border-radius: 5px;
-            }}
-            QListWidget::item:selected {{
-                background: #404040;
-                color: palette(text);
-            }}
-            QListWidget::item:selected:!active {{
-                background: #383838;
             }}
             QPushButton {{
                 min-height: 28px;
