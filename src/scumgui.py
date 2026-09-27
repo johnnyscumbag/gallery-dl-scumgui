@@ -287,6 +287,10 @@ class MainWindow(QMainWindow):
             QListWidget {{
                 alternate-background-color: #353535;
             }}
+            QListWidget::item:selected {{
+                background: palette(highlight);
+                color: palette(highlighted-text);
+            }}
             QPushButton {{
                 min-height: 28px;
                 padding-left: 10px;
