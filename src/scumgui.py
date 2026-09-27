@@ -850,18 +850,18 @@ if ($processes.Count -gt 0) {
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    style_name = "windows11"
+    style_name = "Fusion"
     qt_conf = app_root() / "qt.conf"
     if qt_conf.is_file():
         style_settings = QSettings(str(qt_conf), QSettings.Format.IniFormat)
         requested_style = str(
-            style_settings.value("ScumGUI/Style", "windows11")
+            style_settings.value("ScumGUI/Style", "Fusion")
         ).strip()
         if requested_style:
             available_styles = {
                 style.lower(): style for style in QStyleFactory.keys()
             }
-            style_name = available_styles.get(requested_style.lower(), "windows11")
+            style_name = available_styles.get(requested_style.lower(), "Fusion")
 
     app.setStyle(style_name)
 
