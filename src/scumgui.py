@@ -284,6 +284,9 @@ class MainWindow(QMainWindow):
             QLineEdit, QListWidget, QTextEdit {{
                 border-radius: 5px;
             }}
+            QListWidget {{
+                alternate-background-color: #303030;
+            }}
             QListWidget::item:selected {{
                 background: #404040;
                 color: palette(text);
