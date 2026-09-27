@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
                 background: palette(window);
             }
             QLabel#appSubtitle {
-                color: palette(mid);
+                color: #a8a8a8;
             }
             QLineEdit, QListWidget, QTextEdit {
                 border-radius: 5px;
