@@ -9,10 +9,11 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, QSettings, Qt
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtGui import QColor, QIcon, QPalette
 from progress import parse_progress
 
 from PySide6.QtWidgets import (
+    QStyleFactory,
     QApplication,
     QFileDialog,
     QGridLayout,
@@ -269,7 +270,11 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(log_box, 2)
 
-        self.setStyleSheet("""
+        disabled_button_color = self.palette().color(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Text,
+        ).name()
+        self.setStyleSheet(f"""
             QMainWindow {
                 background: palette(window);
             }
@@ -285,7 +290,7 @@ class MainWindow(QMainWindow):
                 padding-right: 10px;
             }
             QPushButton:disabled {
-                color: #8a8a8a;
+                color: {disabled_button_color};
             }
             QGroupBox {
                 margin-top: 8px;
@@ -845,7 +850,20 @@ if ($processes.Count -gt 0) {
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setStyle("windows11")
+    style_name = "windows11"
+    qt_conf = app_root() / "qt.conf"
+    if qt_conf.is_file():
+        style_settings = QSettings(str(qt_conf), QSettings.Format.IniFormat)
+        requested_style = str(
+            style_settings.value("ScumGUI/Style", "windows11")
+        ).strip()
+        if requested_style:
+            available_styles = {
+                style.lower(): style for style in QStyleFactory.keys()
+            }
+            style_name = available_styles.get(requested_style.lower(), "windows11")
+
+    app.setStyle(style_name)
 
     window = MainWindow()
     window.show()
