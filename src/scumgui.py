@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
                 padding-right: 10px;
             }}
             QPushButton:disabled {{
-                color: {{disabled_button_color};
+                color: {disabled_button_color};
             }}
             QGroupBox {{
                 margin-top: 8px;
