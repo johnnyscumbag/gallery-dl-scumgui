@@ -63,8 +63,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/ScumGUI/Resources" | Out-Null
           Copy-Item "gallery-dl/gallery-dl.exe" "dist/ScumGUI/Resources/gallery-dl.exe"
           Copy-Item "Resources/scumgui-gallery-dl.json" "dist/ScumGUI/Resources/scumgui-gallery-dl.json"
+          Copy-Item "qt.conf" "dist/ScumGUI/qt.conf"
           if (-not (Test-Path "dist/ScumGUI/Resources/scumgui-gallery-dl.json")) {
             throw "The ScumGUI gallery-dl configuration was not included in the build."
+          }
+          if (-not (Test-Path "dist/ScumGUI/qt.conf")) {
+            throw "The ScumGUI Qt style configuration was not included in the build."
           }
 
       - name: Upload executable
