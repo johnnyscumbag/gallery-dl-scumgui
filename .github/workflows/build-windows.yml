@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pyinstaller pillow
+          python -m pip install pyinstaller
 
       - name: Run tests
         run: python -m unittest discover -s tests -v
@@ -36,28 +36,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
-          @'
-          from pathlib import Path
-          from PIL import Image
-          import struct
-
-          source = Path("assets/scumgui.png")
-          output = Path("build/scumgui.ico")
-          sizes = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (24, 24), (16, 16)]
-
-          image = Image.open(source).convert("RGBA")
-          image.save(output, format="ICO", sizes=sizes, bitmap_format="bmp")
-
-          with output.open("rb") as fh:
-              header = fh.read(6)
-          reserved, icon_type, count = struct.unpack("<HHH", header)
-
-          if (reserved, icon_type, count) != (0, 1, len(sizes)):
-              raise RuntimeError(f"Unexpected ICO header: {(reserved, icon_type, count)}")
-
-          print(f"Created {output} with {count} icon sizes.")
-          '@ | Set-Content -Path build_icon.py -Encoding UTF8
-          python build_icon.py
+          magick identify "assets/scumgui.png"
+          magick "assets/scumgui.png" -define icon:auto-resize=256,128,64,48,32,24,16 "build/scumgui.ico"
+          magick identify "build/scumgui.ico"
+          if ($LASTEXITCODE -ne 0) {
+            throw "ImageMagick failed to create the Windows icon."
+          }
 
       - name: Download gallery-dl engine
         shell: pwsh
