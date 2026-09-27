@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
 
         logo = QLabel()
         logo.setPixmap(
-            QIcon(str(resource_path("assets/scumgui.ico"))).pixmap(48, 48)
+            QIcon(str(resource_path("assets/scumgui.png"))).pixmap(48, 48)
         )
         logo.setFixedSize(48, 48)
         header.addWidget(logo)
