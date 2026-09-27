@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
                 padding-right: 10px;
             }
             QPushButton:disabled {
-                color: palette(mid);
+                color: #8a8a8a;
             }
             QGroupBox {
                 margin-top: 8px;
