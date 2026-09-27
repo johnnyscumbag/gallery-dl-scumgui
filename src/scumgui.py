@@ -319,43 +319,63 @@ class MainWindow(QMainWindow):
                 background: palette(base);
                 width: 10px;
                 margin: 0;
+                border: none;
             }}
             QScrollBar::handle:vertical {{
                 background: #555555;
                 min-height: 30px;
                 border-radius: 5px;
+                border: none;
             }}
             QScrollBar::handle:vertical:hover {{
                 background: #666666;
             }}
             QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {{
-                height: 0;
-            }}
+            QScrollBar::sub-line:vertical,
             QScrollBar::add-page:vertical,
             QScrollBar::sub-page:vertical {{
                 background: transparent;
+                border: none;
+                height: 0;
+                image: none;
+            }}
+            QScrollBar::up-arrow:vertical,
+            QScrollBar::down-arrow:vertical {{
+                width: 0;
+                height: 0;
+                border: none;
+                image: none;
             }}
             QScrollBar:horizontal {{
                 background: palette(base);
                 height: 10px;
                 margin: 0;
+                border: none;
             }}
             QScrollBar::handle:horizontal {{
                 background: #555555;
                 min-width: 30px;
                 border-radius: 5px;
+                border: none;
             }}
             QScrollBar::handle:horizontal:hover {{
                 background: #666666;
             }}
             QScrollBar::add-line:horizontal,
-            QScrollBar::sub-line:horizontal {{
-                width: 0;
-            }}
+            QScrollBar::sub-line:horizontal,
             QScrollBar::add-page:horizontal,
             QScrollBar::sub-page:horizontal {{
                 background: transparent;
+                border: none;
+                width: 0;
+                image: none;
+            }}
+            QScrollBar::left-arrow:horizontal,
+            QScrollBar::right-arrow:horizontal {{
+                width: 0;
+                height: 0;
+                border: none;
+                image: none;
             }}
             QGroupBox {{
                 margin-top: 8px;
