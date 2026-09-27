@@ -285,19 +285,13 @@ class MainWindow(QMainWindow):
                 border-radius: 5px;
             }}
             QListWidget {{
-                alternate-background-color: #303030;
-            }}
-            QListWidget::item:selected {{
-                background: #404040;
-                color: palette(text);
-            }}
-            QListWidget::item:selected:!active {{
-                background: #383838;
+                alternate-background-color: #353535;
             }}
             QPushButton {{
                 min-height: 28px;
                 padding-left: 10px;
                 padding-right: 10px;
+                border-radius: 5px;
             }}
             QPushButton:disabled {{
                 color: {disabled_button_color};
