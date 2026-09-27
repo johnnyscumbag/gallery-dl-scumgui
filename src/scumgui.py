@@ -305,6 +305,16 @@ class MainWindow(QMainWindow):
             QPushButton:disabled {{
                 color: {disabled_button_color};
             }}
+            QProgressBar {{
+                border: 1px solid palette(mid);
+                border-radius: 5px;
+                background-color: palette(base);
+                text-align: center;
+            }}
+            QProgressBar::chunk {{
+                border-radius: 4px;
+                background-color: palette(highlight);
+            }}
             QGroupBox {{
                 margin-top: 8px;
                 padding-top: 8px;
