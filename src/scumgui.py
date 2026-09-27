@@ -275,32 +275,32 @@ class MainWindow(QMainWindow):
             QPalette.ColorRole.Text,
         ).name()
         self.setStyleSheet(f"""
-            QMainWindow {
+            QMainWindow {{
                 background: palette(window);
-            }
-            QLabel#appSubtitle {
+            }}
+            QLabel#appSubtitle {{
                 color: #a8a8a8;
-            }
-            QLineEdit, QListWidget, QTextEdit {
+            }}
+            QLineEdit, QListWidget, QTextEdit {{
                 border-radius: 5px;
-            }
-            QPushButton {
+            }}
+            QPushButton {{
                 min-height: 28px;
                 padding-left: 10px;
                 padding-right: 10px;
-            }
-            QPushButton:disabled {
-                color: {disabled_button_color};
-            }
-            QGroupBox {
+            }}
+            QPushButton:disabled {{
+                color: {{disabled_button_color};
+            }}
+            QGroupBox {{
                 margin-top: 8px;
                 padding-top: 8px;
-            }
-            QGroupBox::title {
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 8px;
                 padding: 0 4px;
-            }
+            }}
         """)
         self.log_message("ScumGUI started.")
         engine = find_gallery_dl()
