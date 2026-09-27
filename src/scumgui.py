@@ -14,15 +14,15 @@ from progress import parse_progress
 
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QGridLayout,
-    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QTextEdit,
@@ -117,69 +117,136 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
 
-        input_box = QGroupBox("Download")
-        input_grid = QGridLayout(input_box)
+        # Compact application header.
+        header = QHBoxLayout()
+        header.setContentsMargins(2, 0, 2, 0)
+        header.setSpacing(10)
 
-        input_grid.addWidget(QLabel("URL"), 0, 0)
+        logo = QLabel()
+        logo.setPixmap(
+            QIcon(str(resource_path("assets/scumgui.ico"))).pixmap(48, 48)
+        )
+        logo.setFixedSize(48, 48)
+        header.addWidget(logo)
+
+        title_layout = QVBoxLayout()
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(0)
+
+        title = QLabel(APP_NAME)
+        title_font = title.font()
+        title_font.setPointSize(18)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title_layout.addWidget(title)
+
+        subtitle = QLabel("gallery-dl frontend")
+        subtitle.setObjectName("appSubtitle")
+        title_layout.addWidget(subtitle)
+
+        header.addLayout(title_layout)
+        header.addStretch(1)
+        layout.addLayout(header)
+
+        # Compact download input area.
+        input_grid = QGridLayout()
+        input_grid.setContentsMargins(2, 2, 2, 2)
+        input_grid.setHorizontalSpacing(10)
+        input_grid.setVerticalSpacing(7)
+        input_grid.setColumnStretch(1, 1)
+
+        url_label = QLabel("URL")
+        url_label.setMinimumWidth(75)
+        input_grid.addWidget(url_label, 0, 0)
+
         self.url_edit = QLineEdit()
         self.url_edit.setPlaceholderText("Paste a gallery-dl URL here…")
         self.url_edit.returnPressed.connect(self.add_url)
-        input_grid.addWidget(self.url_edit, 0, 1, 1, 2)
+        input_grid.addWidget(self.url_edit, 0, 1)
 
         self.add_button = QPushButton("Add to Queue")
+        self.add_button.setMinimumWidth(130)
         self.add_button.clicked.connect(self.add_url)
-        input_grid.addWidget(self.add_button, 0, 3)
+        input_grid.addWidget(self.add_button, 0, 2)
 
-        input_grid.addWidget(QLabel("Destination"), 1, 0)
+        destination_label = QLabel("Destination")
+        destination_label.setMinimumWidth(75)
+        input_grid.addWidget(destination_label, 1, 0)
+
         base_folder = str(self.settings.value("base_folder", "M:\\Blah"))
         self.destination_edit = QLineEdit(base_folder)
-        input_grid.addWidget(self.destination_edit, 1, 1, 1, 3)
+        input_grid.addWidget(self.destination_edit, 1, 1)
 
-        layout.addWidget(input_box)
+        self.browse_button = QPushButton("…")
+        self.browse_button.setToolTip("Choose a destination folder")
+        self.browse_button.setFixedWidth(36)
+        self.browse_button.clicked.connect(self.browse_destination)
+        input_grid.addWidget(self.browse_button, 1, 2)
+
+        layout.addLayout(input_grid)
 
         queue_box = QGroupBox("Queue")
         queue_layout = QVBoxLayout(queue_box)
+        queue_layout.setContentsMargins(8, 8, 8, 8)
+        queue_layout.setSpacing(7)
 
         self.queue = QListWidget()
         self.queue.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
-        queue_layout.addWidget(self.queue)
+        self.queue.setAlternatingRowColors(True)
+        self.queue.setUniformItemSizes(False)
+        queue_layout.addWidget(self.queue, 1)
 
         self.queue_progress = QProgressBar()
         self.queue_progress.setRange(0, 1)
         self.queue_progress.setValue(0)
         self.queue_progress.setFormat("Queue: 0 / 0")
+        self.queue_progress.setTextVisible(True)
+        self.queue_progress.setFixedHeight(18)
         queue_layout.addWidget(self.queue_progress)
 
-        controls = QGridLayout()
+        controls = QHBoxLayout()
+        controls.setSpacing(7)
 
         remove_button = QPushButton("Remove Selected")
         remove_button.clicked.connect(self.remove_selected)
-        controls.addWidget(remove_button, 0, 0)
+        controls.addWidget(remove_button)
 
         clear_button = QPushButton("Clear Finished")
         clear_button.clicked.connect(self.clear_finished)
-        controls.addWidget(clear_button, 0, 1)
+        controls.addWidget(clear_button)
+
+        controls.addStretch(1)
 
         self.download_button = QPushButton("Download")
         self.download_button.clicked.connect(self.start_download)
-        controls.addWidget(self.download_button, 0, 3)
+        controls.addWidget(self.download_button)
 
         self.cancel_button = QPushButton("Cancel Current")
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self.cancel_download)
-        controls.addWidget(self.cancel_button, 0, 4)
+        controls.addWidget(self.cancel_button)
 
         self.cancel_all_button = QPushButton("Cancel All")
         self.cancel_all_button.setEnabled(False)
         self.cancel_all_button.clicked.connect(self.cancel_all)
-        controls.addWidget(self.cancel_all_button, 0, 5)
+        controls.addWidget(self.cancel_all_button)
 
         queue_layout.addLayout(controls)
-        layout.addWidget(queue_box, 1)
+        layout.addWidget(queue_box, 2)
 
         status_box = QGroupBox("Current Item")
         status_layout = QVBoxLayout(status_box)
+        status_layout.setContentsMargins(8, 8, 8, 8)
+        status_layout.setSpacing(6)
+
+        self.status_label = QLabel("Ready")
+        self.status_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        status_layout.addWidget(self.status_label)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
@@ -187,26 +254,71 @@ class MainWindow(QMainWindow):
         self.progress.setFormat("Idle")
         status_layout.addWidget(self.progress)
 
-        self.status_label = QLabel("Ready")
-        status_layout.addWidget(self.status_label)
         layout.addWidget(status_box)
 
-        log_box = QGroupBox("Log")
+        log_box = QGroupBox("Activity")
         log_layout = QVBoxLayout(log_box)
+        log_layout.setContentsMargins(8, 8, 8, 8)
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
         self.log.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.log.setPlaceholderText("Download activity will appear here…")
         log_layout.addWidget(self.log)
 
-        layout.addWidget(log_box, 1)
+        layout.addWidget(log_box, 2)
 
+        self.setStyleSheet("""
+            QMainWindow {
+                background: palette(window);
+            }
+            QLabel#appSubtitle {
+                color: palette(mid);
+            }
+            QLineEdit, QListWidget, QTextEdit {
+                border-radius: 5px;
+            }
+            QPushButton {
+                min-height: 28px;
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+            QPushButton:disabled {
+                color: palette(mid);
+            }
+            QGroupBox {
+                margin-top: 8px;
+                padding-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }
+        """)
         self.log_message("ScumGUI started.")
         engine = find_gallery_dl()
         if engine:
             self.log_message(f"gallery-dl engine: {engine}")
         else:
             self.log_message("gallery-dl engine not found; PATH fallback unavailable.")
+
+    def browse_destination(self) -> None:
+        base_folder = Path(
+            self.settings.value("base_folder", "M:\\Blah")
+        ).expanduser()
+
+        current = Path(self.destination_edit.text().strip()).expanduser()
+        if not current.is_dir():
+            current = base_folder
+
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Choose destination folder",
+            str(current),
+        )
+        if selected:
+            self.destination_edit.setText(str(Path(selected)))
 
     def add_url(self) -> None:
         url = self.url_edit.text().strip()
