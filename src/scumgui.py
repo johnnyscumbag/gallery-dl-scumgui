@@ -284,6 +284,13 @@ class MainWindow(QMainWindow):
             QLineEdit, QListWidget, QTextEdit {{
                 border-radius: 5px;
             }}
+            QListWidget::item:selected {{
+                background: #404040;
+                color: palette(text);
+            }}
+            QListWidget::item:selected:!active {{
+                background: #383838;
+            }}
             QPushButton {{
                 min-height: 28px;
                 padding-left: 10px;
