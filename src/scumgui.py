@@ -296,6 +296,8 @@ class MainWindow(QMainWindow):
                 padding-left: 10px;
                 padding-right: 10px;
                 border-radius: 5px;
+                background-color: palette(button);
+                border: 1px solid palette(mid);
             }}
             QPushButton:disabled {{
                 color: {disabled_button_color};
