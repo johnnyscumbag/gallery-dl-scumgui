@@ -32,58 +32,6 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Prepare Windows icon
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path build | Out-Null
-          @'
-          from pathlib import Path
-          import struct
-          import zlib
-
-          source = Path("assets/scumgui.png")
-          repaired = Path("build/scumgui-master.png")
-          data = source.read_bytes()
-
-          if data[:8] != b"\x89PNG\r\n\x1a\n":
-              raise RuntimeError("The ScumGUI PNG does not have a valid PNG signature.")
-
-          pos = 8
-          output = bytearray(data[:8])
-          while pos < len(data):
-              if pos + 12 > len(data):
-                  raise RuntimeError("Truncated PNG chunk.")
-              length = struct.unpack(">I", data[pos:pos + 4])[0]
-              chunk_type = data[pos + 4:pos + 8]
-              chunk_end = pos + 12 + length
-              if chunk_end > len(data):
-                  raise RuntimeError("Truncated PNG chunk data.")
-              chunk_data = data[pos + 8:pos + 8 + length]
-              crc = zlib.crc32(chunk_type + chunk_data) & 0xffffffff
-              output.extend(struct.pack(">I", length))
-              output.extend(chunk_type)
-              output.extend(chunk_data)
-              output.extend(struct.pack(">I", crc))
-              pos = chunk_end
-
-          repaired.write_bytes(output)
-
-          from PIL import Image
-          with Image.open(repaired) as image:
-              image.load()
-              if image.size != (256, 256):
-                  raise RuntimeError(f"Unexpected ScumGUI PNG size: {image.size}")
-
-          print(f"Repaired PNG written to {repaired}")
-
-          '@ | Set-Content -Path repair_png.py -Encoding UTF8
-          python repair_png.py
-          magick "build/scumgui-master.png" -define icon:auto-resize=256,128,64,48,32,24,16 "build/scumgui.ico"
-          magick identify "build/scumgui.ico"
-          if ($LASTEXITCODE -ne 0) {
-            throw "ImageMagick failed to create the Windows icon."
-          }
-
       - name: Download gallery-dl engine
         shell: pwsh
         run: |
@@ -104,7 +52,7 @@ jobs:
           --onedir
           --windowed
           --name ScumGUI
-          --icon build/scumgui.ico
+          --icon assets/scumgui.ico
           --add-data "assets;assets"
           --paths src
           src/scumgui.py
