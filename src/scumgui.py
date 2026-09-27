@@ -295,9 +295,12 @@ class MainWindow(QMainWindow):
                 min-height: 28px;
                 padding-left: 10px;
                 padding-right: 10px;
-                border-radius: 5px;
+                border-radius: 9px;
                 background-color: palette(button);
                 border: 1px solid palette(mid);
+            }}
+            QPushButton:hover {{
+                background-color: palette(midlight);
             }}
             QPushButton:disabled {{
                 color: {disabled_button_color};
