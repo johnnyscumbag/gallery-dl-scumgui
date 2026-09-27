@@ -315,6 +315,48 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 background-color: palette(highlight);
             }}
+            QScrollBar:vertical {{
+                background: palette(base);
+                width: 10px;
+                margin: 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #555555;
+                min-height: 30px;
+                border-radius: 5px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #666666;
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height: 0;
+            }}
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {{
+                background: transparent;
+            }}
+            QScrollBar:horizontal {{
+                background: palette(base);
+                height: 10px;
+                margin: 0;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: #555555;
+                min-width: 30px;
+                border-radius: 5px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background: #666666;
+            }}
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {{
+                width: 0;
+            }}
+            QScrollBar::add-page:horizontal,
+            QScrollBar::sub-page:horizontal {{
+                background: transparent;
+            }}
             QGroupBox {{
                 margin-top: 8px;
                 padding-top: 8px;
