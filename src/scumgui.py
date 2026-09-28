@@ -486,16 +486,25 @@ class MainWindow(QMainWindow):
             item.list_item.setForeground(self.palette().text().color())
 
     def remove_selected(self) -> None:
-        selected = set(self.queue.selectedItems())
-        if not selected:
-            return
-
         if self.process.state() != QProcess.ProcessState.NotRunning:
             return
 
-        self.queue_items = [item for item in self.queue_items if item.list_item not in selected]
-        for list_item in selected:
-            self.queue.takeItem(self.queue.row(list_item))
+        selected_items = self.queue.selectedItems()
+        if not selected_items:
+            return
+
+        selected = set(selected_items)
+        self.queue_items = [
+            item for item in self.queue_items
+            if item.list_item not in selected
+        ]
+
+        for row in sorted(
+            (self.queue.row(list_item) for list_item in selected_items),
+            reverse=True,
+        ):
+            self.queue.takeItem(row)
+
         self.update_queue_progress()
 
     def clear_finished(self) -> None:
