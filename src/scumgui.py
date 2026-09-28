@@ -442,14 +442,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        destination = str(destination_path)
-        if not destination or destination == ".":
-            QMessageBox.warning(
-                self,
-                APP_NAME,
-                "Enter a destination folder name after the base folder.",
-            )
-            return
+        destination = "" if str(destination_path) == "." else str(destination_path)
 
         item = QueueItem(url, destination)
         self.queue_items.append(item)
