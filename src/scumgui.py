@@ -489,20 +489,21 @@ class MainWindow(QMainWindow):
         if self.process.state() != QProcess.ProcessState.NotRunning:
             return
 
-        selected_items = self.queue.selectedItems()
-        if not selected_items:
+        selected_rows = sorted(
+            {self.queue.row(item) for item in self.queue.selectedItems()},
+            reverse=True,
+        )
+        if not selected_rows:
             return
 
-        selected = set(selected_items)
+        selected_rows_set = set(selected_rows)
         self.queue_items = [
-            item for item in self.queue_items
-            if item.list_item not in selected
+            item
+            for row, item in enumerate(self.queue_items)
+            if row not in selected_rows_set
         ]
 
-        for row in sorted(
-            (self.queue.row(list_item) for list_item in selected_items),
-            reverse=True,
-        ):
+        for row in selected_rows:
             self.queue.takeItem(row)
 
         self.update_queue_progress()
