@@ -484,9 +484,6 @@ class MainWindow(QMainWindow):
             item.list_item.setForeground(self.palette().text().color())
 
     def remove_selected(self) -> None:
-        if self.process.state() != QProcess.ProcessState.NotRunning:
-            return
-
         selected_rows = sorted(
             {self.queue.row(item) for item in self.queue.selectedItems()},
             reverse=True,
@@ -494,33 +491,73 @@ class MainWindow(QMainWindow):
         if not selected_rows:
             return
 
-        selected_rows_set = set(selected_rows)
+        current_item = (
+            self.queue_items[self.current_index]
+            if 0 <= self.current_index < len(self.queue_items)
+            else None
+        )
+        removable_rows = [
+            row
+            for row in selected_rows
+            if 0 <= row < len(self.queue_items)
+            and self.queue_items[row] is not current_item
+        ]
+        if not removable_rows:
+            return
+
+        removable = set(removable_rows)
         self.queue_items = [
             item
             for row, item in enumerate(self.queue_items)
-            if row not in selected_rows_set
+            if row not in removable
         ]
 
-        for row in selected_rows:
+        for row in removable_rows:
             self.queue.takeItem(row)
+
+        if current_item is not None:
+            self.current_index = self.queue_items.index(current_item)
+        else:
+            self.current_index = -1
 
         self.update_queue_progress()
 
     def clear_finished(self) -> None:
-        if self.process.state() != QProcess.ProcessState.NotRunning:
-            return
-
         finished = {
             QueueItem.COMPLETED,
             QueueItem.COMPLETED_WITH_ERRORS,
             QueueItem.FAILED,
             QueueItem.CANCELLED,
         }
-        for item in list(self.queue_items):
-            if item.status in finished:
-                if item.list_item is not None:
-                    self.queue.takeItem(self.queue.row(item.list_item))
-                self.queue_items.remove(item)
+        current_item = (
+            self.queue_items[self.current_index]
+            if 0 <= self.current_index < len(self.queue_items)
+            else None
+        )
+
+        removable_rows = [
+            row
+            for row, item in enumerate(self.queue_items)
+            if item.status in finished and item is not current_item
+        ]
+        if not removable_rows:
+            return
+
+        for row in reversed(removable_rows):
+            self.queue.takeItem(row)
+
+        removable = set(removable_rows)
+        self.queue_items = [
+            item
+            for row, item in enumerate(self.queue_items)
+            if row not in removable
+        ]
+
+        if current_item is not None:
+            self.current_index = self.queue_items.index(current_item)
+        else:
+            self.current_index = -1
+
         self.update_queue_progress()
 
     def update_queue_progress(self) -> None:
