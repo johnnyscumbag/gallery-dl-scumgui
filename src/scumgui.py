@@ -454,17 +454,22 @@ class MainWindow(QMainWindow):
 
         self.url_edit.clear()
         self.update_queue_progress()
-        self.log_message(f"Added: {destination}  —  {url}")
+        self.log_message(f"Added: {base_folder / destination}  —  {url}")
 
     def refresh_queue_item(self, item: QueueItem) -> None:
         if item.list_item is None:
             return
 
+        base_folder = Path(
+            self.settings.value("base_folder", "M:\\Blah")
+        ).expanduser()
+        display_destination = str(base_folder / item.destination)
+
         stats = f"D:{item.downloaded}  S:{item.skipped}  E:{item.errors}"
         if item.status == QueueItem.DOWNLOADING and item.current_file:
-            text = f"[{item.status}]  {stats}  {item.destination}  —  {item.current_file}"
+            text = f"[{item.status}]  {stats}  {display_destination}  —  {item.current_file}"
         else:
-            text = f"[{item.status}]  {stats}  {item.destination}  —  {item.url}"
+            text = f"[{item.status}]  {stats}  {display_destination}  —  {item.url}"
         item.list_item.setText(text)
 
         if item.status == QueueItem.COMPLETED:
@@ -580,14 +585,14 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.progress.setFormat("Downloading…")
         item.started_at = time.monotonic()
-        self.status_label.setText(f"Downloading: {item.destination}  —  {item.url}  |  D:0  S:0  E:0")
+        self.status_label.setText(f"Downloading: {destination}  —  {item.url}  |  D:0  S:0  E:0")
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.cancel_all_button.setEnabled(True)
         self.cancelling = False
 
         self.process.setWorkingDirectory(str(destination))
-        self.log_message(f"Starting: {item.destination}  —  {item.url}")
+        self.log_message(f"Starting: {destination}  —  {item.url}")
         args = []
         scumgui_config = app_root() / "Resources" / "scumgui-gallery-dl.json"
         if scumgui_config.is_file():
