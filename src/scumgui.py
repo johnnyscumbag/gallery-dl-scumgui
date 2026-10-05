@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(0)
 
-        title = QLabel(APP_NAME)
+        title = QLabel(f"{APP_NAME} {APP_VERSION}")
         title_font = title.font()
         title_font.setPointSize(18)
         title_font.setBold(True)
