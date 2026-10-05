@@ -141,10 +141,30 @@ jobs:
             throw "OpenSSH client (ssh-keyscan) is not available on the runner."
           }
 
-          ssh-keyscan -H $env:ULTRA_HOST 2>$null | Out-File -FilePath $knownHostsPath -Encoding ascii
+          Write-Host "Resolving $env:ULTRA_HOST..."
+          Resolve-DnsName $env:ULTRA_HOST -ErrorAction Stop |
+            Where-Object { $_.Type -in @("A", "AAAA") } |
+            Select-Object Name, Type, IPAddress |
+            Format-Table -AutoSize
+
+          Write-Host "Testing TCP connectivity to $($env:ULTRA_HOST):22..."
+          $tcpTest = Test-NetConnection -ComputerName $env:ULTRA_HOST -Port 22 -InformationLevel Detailed
+          if (-not $tcpTest.TcpTestSucceeded) {
+            throw "TCP connection to $($env:ULTRA_HOST):22 failed."
+          }
+
+          Write-Host "Obtaining SSH host key over IPv4..."
+          $scanOutput = @(ssh-keyscan -4 -p 22 -T 15 -H $env:ULTRA_HOST 2>$null)
+          $scanExitCode = $LASTEXITCODE
+
+          if ($scanExitCode -ne 0 -or $scanOutput.Count -eq 0) {
+            throw "Could not obtain the SSH host key for $env:ULTRA_HOST (ssh-keyscan exit code $scanExitCode)."
+          }
+
+          $scanOutput | Out-File -FilePath $knownHostsPath -Encoding ascii
 
           if (-not (Test-Path $knownHostsPath) -or (Get-Item $knownHostsPath).Length -eq 0) {
-            throw "Could not obtain the SSH host key for $env:ULTRA_HOST."
+            throw "The SSH host key file was not created."
           }
 
           $remoteVersionedPath = "$env:ULTRA_SFTP_PATH/$env:SCUMGUI_ZIP_NAME"
