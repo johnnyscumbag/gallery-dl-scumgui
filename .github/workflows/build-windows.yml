@@ -44,6 +44,22 @@ jobs:
             throw "The bundled gallery-dl executable failed its version check."
           }
 
+      - name: Read ScumGUI version
+        shell: pwsh
+        run: |
+          $match = Select-String -Path "src/scumgui.py" -Pattern '^APP_VERSION\s*=\s*"([^"]+)"\s*$'
+          if (-not $match) {
+            throw "APP_VERSION was not found in src/scumgui.py."
+          }
+
+          $version = $match.Matches[0].Groups[1].Value
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "APP_VERSION is empty."
+          }
+
+          "SCUMGUI_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "ScumGUI version: $version"
+
       - name: Build executable
         run: >
           python -m PyInstaller
@@ -64,16 +80,114 @@ jobs:
           Copy-Item "gallery-dl/gallery-dl.exe" "dist/ScumGUI/Resources/gallery-dl.exe"
           Copy-Item "Resources/scumgui-gallery-dl.json" "dist/ScumGUI/Resources/scumgui-gallery-dl.json"
           Copy-Item "qt.conf" "dist/ScumGUI/qt.conf"
+
           if (-not (Test-Path "dist/ScumGUI/Resources/scumgui-gallery-dl.json")) {
             throw "The ScumGUI gallery-dl configuration was not included in the build."
           }
+
           if (-not (Test-Path "dist/ScumGUI/qt.conf")) {
             throw "The ScumGUI Qt style configuration was not included in the build."
           }
 
-      - name: Upload executable
-        uses: actions/upload-artifact@v7
-        with:
-          name: ScumGUI-windows-x64
-          path: dist/ScumGUI
-          if-no-files-found: error
+      - name: Package build
+        shell: pwsh
+        run: |
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $zipName = "ScumGUI-windows-x64-v$env:SCUMGUI_VERSION-$shortSha.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive -Path "dist/ScumGUI" -DestinationPath $zipPath -CompressionLevel Optimal
+
+          if (-not (Test-Path $zipPath)) {
+            throw "The build ZIP was not created."
+          }
+
+          "SCUMGUI_ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+          "SCUMGUI_ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+
+          Write-Host "Created: $zipName"
+          Get-Item $zipPath | Select-Object Name, Length
+
+      - name: Upload build to Ultra.cc
+        shell: pwsh
+        env:
+          ULTRA_HOST: ${{ secrets.ULTRA_HOST }}
+          ULTRA_USER: ${{ secrets.ULTRA_USER }}
+          ULTRA_SSH_KEY: ${{ secrets.ULTRA_SSH_KEY }}
+          ULTRA_SFTP_PATH: ${{ secrets.ULTRA_SFTP_PATH }}
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "scumgui_ultra_key"
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "scumgui_known_hosts"
+
+          [System.IO.File]::WriteAllText(
+            $keyPath,
+            $env:ULTRA_SSH_KEY,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+          if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
+            throw "OpenSSH client (ssh) is not available on the runner."
+          }
+
+          if (-not (Get-Command scp -ErrorAction SilentlyContinue)) {
+            throw "OpenSSH client (scp) is not available on the runner."
+          }
+
+          if (-not (Get-Command ssh-keyscan -ErrorAction SilentlyContinue)) {
+            throw "OpenSSH client (ssh-keyscan) is not available on the runner."
+          }
+
+          ssh-keyscan -H $env:ULTRA_HOST 2>$null | Out-File -FilePath $knownHostsPath -Encoding ascii
+
+          if (-not (Test-Path $knownHostsPath) -or (Get-Item $knownHostsPath).Length -eq 0) {
+            throw "Could not obtain the SSH host key for $env:ULTRA_HOST."
+          }
+
+          $remoteVersionedPath = "$env:ULTRA_SFTP_PATH/$env:SCUMGUI_ZIP_NAME"
+
+          scp -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" $env:SCUMGUI_ZIP_PATH "${env:ULTRA_USER}@${env:ULTRA_HOST}:$remoteVersionedPath"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "SCP upload failed."
+          }
+
+          Write-Host "Uploaded $env:SCUMGUI_ZIP_NAME"
+
+          $remoteLatestPath = "$env:ULTRA_SFTP_PATH/ScumGUI-windows-x64-latest.zip"
+
+          ssh -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "cp -- '$remoteVersionedPath' '$remoteLatestPath'"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Remote copy to latest ZIP failed."
+          }
+
+          Write-Host "Updated ScumGUI-windows-x64-latest.zip"
+
+          ssh -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "ls -lh '$remoteVersionedPath' '$remoteLatestPath'"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Remote upload verification failed."
+          }
+
+      - name: Publish build links
+        shell: pwsh
+        env:
+          ULTRA_HTTP_URL: ${{ secrets.ULTRA_HTTP_URL }}
+        run: |
+          $baseUrl = $env:ULTRA_HTTP_URL.TrimEnd('/')
+          $versionedUrl = "$baseUrl/$env:SCUMGUI_ZIP_NAME"
+          $latestUrl = "$baseUrl/ScumGUI-windows-x64-latest.zip"
+
+          @"
+          ## ScumGUI Windows build
+
+          **Version:** $env:SCUMGUI_VERSION  
+          **Commit:** $env:GITHUB_SHA
+
+          - [Download this build ($env:SCUMGUI_ZIP_NAME)]($versionedUrl)
+          - [Download latest build]($latestUrl)
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
