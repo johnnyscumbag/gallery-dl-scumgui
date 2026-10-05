@@ -137,10 +137,6 @@ jobs:
             throw "OpenSSH client (scp) is not available on the runner."
           }
 
-          if (-not (Get-Command ssh-keyscan -ErrorAction SilentlyContinue)) {
-            throw "OpenSSH client (ssh-keyscan) is not available on the runner."
-          }
-
           Write-Host "Resolving $env:ULTRA_HOST..."
           Resolve-DnsName $env:ULTRA_HOST -ErrorAction Stop |
             Where-Object { $_.Type -in @("A", "AAAA") } |
@@ -153,23 +149,22 @@ jobs:
             throw "TCP connection to $($env:ULTRA_HOST):22 failed."
           }
 
-          Write-Host "Obtaining SSH host key over IPv4..."
-          $scanOutput = @(ssh-keyscan -4 -p 22 -T 15 -H $env:ULTRA_HOST 2>$null)
-          $scanExitCode = $LASTEXITCODE
+          Write-Host "Testing SSH authentication and accepting a new host key..."
+          ssh -i $keyPath -o "BatchMode=yes" -o "PreferredAuthentications=publickey" -o "StrictHostKeyChecking=accept-new" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "true"
 
-          if ($scanExitCode -ne 0 -or $scanOutput.Count -eq 0) {
-            throw "Could not obtain the SSH host key for $env:ULTRA_HOST (ssh-keyscan exit code $scanExitCode)."
+          if ($LASTEXITCODE -ne 0) {
+            throw "SSH authentication to $env:ULTRA_HOST failed."
           }
-
-          $scanOutput | Out-File -FilePath $knownHostsPath -Encoding ascii
 
           if (-not (Test-Path $knownHostsPath) -or (Get-Item $knownHostsPath).Length -eq 0) {
-            throw "The SSH host key file was not created."
+            throw "SSH did not create a known_hosts entry."
           }
+
+          Write-Host "SSH authentication succeeded."
 
           $remoteVersionedPath = "$env:ULTRA_SFTP_PATH/$env:SCUMGUI_ZIP_NAME"
 
-          scp -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" $env:SCUMGUI_ZIP_PATH "${env:ULTRA_USER}@${env:ULTRA_HOST}:$remoteVersionedPath"
+          scp -i $keyPath -o "BatchMode=yes" -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" $env:SCUMGUI_ZIP_PATH "${env:ULTRA_USER}@${env:ULTRA_HOST}:$remoteVersionedPath"
 
           if ($LASTEXITCODE -ne 0) {
             throw "SCP upload failed."
@@ -179,7 +174,7 @@ jobs:
 
           $remoteLatestPath = "$env:ULTRA_SFTP_PATH/ScumGUI-windows-x64-latest.zip"
 
-          ssh -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "cp -- '$remoteVersionedPath' '$remoteLatestPath'"
+          ssh -i $keyPath -o "BatchMode=yes" -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "cp -- '$remoteVersionedPath' '$remoteLatestPath'"
 
           if ($LASTEXITCODE -ne 0) {
             throw "Remote copy to latest ZIP failed."
@@ -187,7 +182,7 @@ jobs:
 
           Write-Host "Updated ScumGUI-windows-x64-latest.zip"
 
-          ssh -i $keyPath -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "ls -lh '$remoteVersionedPath' '$remoteLatestPath'"
+          ssh -i $keyPath -o "BatchMode=yes" -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "ls -lh '$remoteVersionedPath' '$remoteLatestPath'"
 
           if ($LASTEXITCODE -ne 0) {
             throw "Remote upload verification failed."
