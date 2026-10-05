@@ -123,9 +123,18 @@ jobs:
           $keyPath = Join-Path $env:RUNNER_TEMP "scumgui_ultra_key"
           $knownHostsPath = Join-Path $env:RUNNER_TEMP "scumgui_known_hosts"
 
+          # Normalize the multiline secret before writing it to disk.
+          $privateKey = $env:ULTRA_SSH_KEY.Trim()
+          $privateKey = [regex]::Replace($privateKey, "\r\n?", [Environment]::NewLine)
+          $privateKey = $privateKey.Replace("\" + "n", [Environment]::NewLine)
+
+          if ($privateKey -notmatch '^-----BEGIN OPENSSH PRIVATE KEY-----[\r\n]+[\s\S]+[\r\n]+-----END OPENSSH PRIVATE KEY-----$') {
+            throw "The ULTRA_SSH_KEY secret is not in OpenSSH private-key format."
+          }
+
           [System.IO.File]::WriteAllText(
             $keyPath,
-            $env:ULTRA_SSH_KEY,
+            $privateKey + [Environment]::NewLine,
             [System.Text.UTF8Encoding]::new($false)
           )
 
@@ -142,6 +151,13 @@ jobs:
 
           if ($LASTEXITCODE -ne 0) {
             throw "Could not restrict permissions on the temporary SSH private key."
+          }
+
+          Write-Host "Validating private-key format..."
+          ssh-keygen -y -f $keyPath > $null
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The ULTRA_SSH_KEY secret could not be parsed by OpenSSH."
           }
 
           Write-Host "Resolving $env:ULTRA_HOST..."
