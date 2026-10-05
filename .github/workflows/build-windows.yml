@@ -137,6 +137,13 @@ jobs:
             throw "OpenSSH client (scp) is not available on the runner."
           }
 
+          Write-Host "Restricting private-key file permissions..."
+          icacls $keyPath /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Host
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not restrict permissions on the temporary SSH private key."
+          }
+
           Write-Host "Resolving $env:ULTRA_HOST..."
           Resolve-DnsName $env:ULTRA_HOST -ErrorAction Stop |
             Where-Object { $_.Type -in @("A", "AAAA") } |
