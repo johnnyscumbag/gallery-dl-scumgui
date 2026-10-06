@@ -96,17 +96,6 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(resource_path("assets/scumgui.ico"))))
         self.resize(980, 720)
 
-        settings_path = app_root() / "ScumGUI.ini"
-        settings_exists = settings_path.is_file()
-        self.settings = QSettings(
-            str(settings_path),
-            QSettings.Format.IniFormat,
-        )
-
-        if not settings_exists:
-            self.settings.setValue("base_folder", "M:\\Blah")
-            self.settings.sync()
-
         self.process = QProcess(self)
         self.process.readyReadStandardOutput.connect(self.read_stdout)
         self.process.readyReadStandardError.connect(self.read_stderr)
@@ -179,8 +168,7 @@ class MainWindow(QMainWindow):
         destination_label.setMinimumWidth(75)
         input_grid.addWidget(destination_label, 1, 0)
 
-        base_folder = str(self.settings.value("base_folder", "M:\\Blah"))
-        self.destination_edit = QLineEdit(base_folder)
+        self.destination_edit = QLineEdit("M:\\Blah")
         input_grid.addWidget(self.destination_edit, 1, 1)
 
         self.browse_button = QPushButton("…")
@@ -396,13 +384,9 @@ class MainWindow(QMainWindow):
             self.log_message("gallery-dl engine not found; PATH fallback unavailable.")
 
     def browse_destination(self) -> None:
-        base_folder = Path(
-            self.settings.value("base_folder", "M:\\Blah")
-        ).expanduser()
-
         current = Path(self.destination_edit.text().strip()).expanduser()
         if not current.is_dir():
-            current = base_folder
+            current = Path("M:\\Blah")
 
         selected = QFileDialog.getExistingDirectory(
             self,
@@ -426,24 +410,16 @@ class MainWindow(QMainWindow):
             )
             return
 
-        base_folder = Path(
-            self.settings.value("base_folder", "M:\\Blah")
-        ).expanduser()
-        entered_path = Path(destination_text).expanduser()
-        base_resolved = base_folder.resolve()
-        entered_resolved = entered_path.resolve()
-
-        try:
-            destination_path = entered_resolved.relative_to(base_resolved)
-        except ValueError:
+        destination_path = Path(destination_text).expanduser()
+        if not destination_path.is_absolute():
             QMessageBox.warning(
                 self,
                 APP_NAME,
-                "The destination must be inside the configured base folder.",
+                "The destination must be an absolute folder path.",
             )
             return
 
-        destination = "" if str(destination_path) == "." else str(destination_path)
+        destination = str(destination_path.resolve())
 
         item = QueueItem(url, destination)
         self.queue_items.append(item)
@@ -455,16 +431,13 @@ class MainWindow(QMainWindow):
 
         self.url_edit.clear()
         self.update_queue_progress()
-        self.log_message(f"Added: {base_folder / destination}  —  {url}")
+        self.log_message(f"Added: {destination}  —  {url}")
 
     def refresh_queue_item(self, item: QueueItem) -> None:
         if item.list_item is None:
             return
 
-        base_folder = Path(
-            self.settings.value("base_folder", "M:\\Blah")
-        ).expanduser()
-        display_destination = str(base_folder / item.destination)
+        display_destination = item.destination
 
         stats = f"D:{item.downloaded}  S:{item.skipped}  E:{item.errors}"
         if item.status == QueueItem.DOWNLOADING and item.current_file:
@@ -601,10 +574,7 @@ class MainWindow(QMainWindow):
         item = self.queue_items[self.current_index]
         item.pending_error_reason = ""
 
-        base_folder = Path(
-            self.settings.value("base_folder", "M:\\Blah")
-        ).expanduser()
-        destination = base_folder / item.destination
+        destination = Path(item.destination)
         try:
             destination.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
