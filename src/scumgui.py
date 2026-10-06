@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 
 
 APP_NAME = "ScumGUI"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 
 class QueueItem:
