@@ -213,10 +213,8 @@ jobs:
 
       - name: Publish build links
         shell: pwsh
-        env:
-          ULTRA_HTTP_URL: ${{ secrets.ULTRA_HTTP_URL }}
         run: |
-          $baseUrl = $env:ULTRA_HTTP_URL.TrimEnd('/')
+          $baseUrl = "https://johnny404.psyche.usbx.me/scumgui"
           $versionedUrl = "$baseUrl/$env:SCUMGUI_ZIP_NAME"
           $latestUrl = "$baseUrl/ScumGUI-windows-x64-latest.zip"
 
