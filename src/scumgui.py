@@ -517,6 +517,7 @@ class MainWindow(QMainWindow):
             self.current_index = -1
 
         self.update_queue_progress()
+        self.save_queue()
 
     def clear_finished(self) -> None:
         finished = {
@@ -555,6 +556,7 @@ class MainWindow(QMainWindow):
             self.current_index = -1
 
         self.update_queue_progress()
+        self.save_queue()
 
     def update_queue_progress(self) -> None:
         total = len(self.queue_items)
