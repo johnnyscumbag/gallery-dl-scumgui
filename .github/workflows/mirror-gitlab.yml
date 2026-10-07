@@ -1,0 +1,33 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mirror repository to GitLab
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git clone --mirror "https://github.com/${{ github.repository }}.git" mirror.git
+          cd mirror.git
+
+          printf 'https://oauth2:%s@gitlab.com\n' "$GITLAB_MIRROR_TOKEN" > "$HOME/.git-credentials"
+          git config credential.helper store
+
+          git push --mirror "https://gitlab.com/johnnyscumbag/gallery-dl-scumgui.git"
+
+          rm -f "$HOME/.git-credentials"
