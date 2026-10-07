@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         self.current_index = -1
         self.cancelling = False
         self.cancel_all_requested = False
+        self.stop_all_requested = False
         self.queue_store = QueuePersistence()
 
         central = QWidget()
@@ -216,6 +217,12 @@ class MainWindow(QMainWindow):
         self.download_button = QPushButton("Download")
         self.download_button.clicked.connect(self.start_download)
         controls.addWidget(self.download_button)
+
+        self.stop_all_button = QPushButton("Stop All")
+        self.stop_all_button.setEnabled(False)
+        self.stop_all_button.setToolTip("Stop the queue and leave unfinished items ready to resume.")
+        self.stop_all_button.clicked.connect(self.stop_all)
+        controls.addWidget(self.stop_all_button)
 
         self.cancel_button = QPushButton("Cancel Current")
         self.cancel_button.setEnabled(False)
@@ -622,7 +629,9 @@ class MainWindow(QMainWindow):
         self.download_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.cancel_all_button.setEnabled(True)
+        self.stop_all_button.setEnabled(True)
         self.cancelling = False
+        self.stop_all_requested = False
 
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {destination}  —  {item.url}")
@@ -708,6 +717,25 @@ if ($processes.Count -gt 0) {
 
         self.cancelling = True
         self.log_message("Stopping gallery-dl…")
+        self.terminate_gallery_process()
+
+    def stop_all(self) -> None:
+        """Stop the queue without cancelling unfinished items."""
+        if self.process.state() == QProcess.ProcessState.NotRunning:
+            self.save_queue()
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.progress.setFormat("Stopped")
+            self.status_label.setText("Queue stopped — unfinished items are ready to resume.")
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
+            self.stop_all_button.setEnabled(False)
+            self.cancel_all_button.setEnabled(False)
+            return
+
+        self.stop_all_requested = True
+        self.cancelling = False
+        self.log_message("Stopping gallery-dl and leaving the queue ready to resume…")
         self.terminate_gallery_process()
 
     def cancel_all(self) -> None:
@@ -890,6 +918,25 @@ if ($processes.Count -gt 0) {
 
         item = self.queue_items[self.current_index]
 
+        if self.stop_all_requested:
+            item.status = QueueItem.WAITING
+            self.refresh_queue_item(item)
+            self.update_queue_progress()
+            self.save_queue()
+            self.stop_all_requested = False
+            self.current_index = -1
+            self.cancelling = False
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.progress.setFormat("Stopped")
+            self.status_label.setText("Queue stopped — unfinished items are ready to resume.")
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
+            self.stop_all_button.setEnabled(False)
+            self.cancel_all_button.setEnabled(False)
+            self.log_message("Queue stopped. Click Download to resume.")
+            return
+
         if self.cancelling:
             item.status = QueueItem.CANCELLED
         elif exit_status == QProcess.ExitStatus.CrashExit:
@@ -932,6 +979,7 @@ if ($processes.Count -gt 0) {
             )
             self.download_button.setEnabled(True)
             self.cancel_button.setEnabled(False)
+            self.stop_all_button.setEnabled(False)
             self.cancel_all_button.setEnabled(False)
             return
 
@@ -953,6 +1001,7 @@ if ($processes.Count -gt 0) {
         )
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
+        self.stop_all_button.setEnabled(False)
         self.cancel_all_button.setEnabled(False)
 
     def closeEvent(self, event) -> None:
