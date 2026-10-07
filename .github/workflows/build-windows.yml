@@ -160,11 +160,20 @@ jobs:
             throw "The ULTRA_SSH_KEY secret could not be parsed by OpenSSH."
           }
 
-          Write-Host "Resolving $env:ULTRA_HOST..."
-          Resolve-DnsName $env:ULTRA_HOST -ErrorAction Stop |
-            Where-Object { $_.Type -in @("A", "AAAA") } |
-            Select-Object Name, Type, IPAddress |
-            Format-Table -AutoSize
+          if ($env:ULTRA_HOST -as [System.Net.IPAddress]) {
+            Write-Host "ULTRA_HOST is an IP address: $env:ULTRA_HOST"
+          } else {
+            Write-Host "Resolving $env:ULTRA_HOST..."
+            $dnsResults = Resolve-DnsName $env:ULTRA_HOST -Type A -ErrorAction Stop
+
+            if (-not $dnsResults) {
+              throw "DNS resolution for $env:ULTRA_HOST returned no A records."
+            }
+
+            $dnsResults |
+              Select-Object Name, Type, IPAddress |
+              Format-Table -AutoSize
+          }
 
           Write-Host "Testing TCP connectivity to $($env:ULTRA_HOST):22..."
           $tcpTest = Test-NetConnection -ComputerName $env:ULTRA_HOST -Port 22 -InformationLevel Detailed
