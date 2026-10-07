@@ -223,7 +223,7 @@ jobs:
       - name: Publish build links
         shell: pwsh
         run: |
-          $baseUrl = "https://johnny404.psyche.usbx.me/scumgui"
+          $baseUrl = "https://JOHNNY404.psyche.usbx.me/scumgui"
           $versionedUrl = "$baseUrl/$env:SCUMGUI_ZIP_NAME"
           $latestUrl = "$baseUrl/ScumGUI-windows-x64-latest.zip"
 
