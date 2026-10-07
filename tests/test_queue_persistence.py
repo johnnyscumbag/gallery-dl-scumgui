@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from queue_persistence import QueuePersistence
+from src.queue_persistence import QueuePersistence
 
 
 def test_queue_round_trip(monkeypatch, tmp_path):
