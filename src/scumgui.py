@@ -107,6 +107,7 @@ class MainWindow(QMainWindow):
         self.cancelling = False
         self.cancel_all_requested = False
         self.stop_all_requested = False
+        self.closing = False
         self.queue_store = QueuePersistence()
 
         central = QWidget()
@@ -913,6 +914,9 @@ if ($processes.Count -gt 0) {
         )
 
     def process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        if self.closing:
+            return
+
         if self.current_index < 0:
             return
 
@@ -1005,10 +1009,23 @@ if ($processes.Count -gt 0) {
         self.cancel_all_button.setEnabled(False)
 
     def closeEvent(self, event) -> None:
-        self.save_queue()
+        self.closing = True
+
+        # A normal application close is a pause, not a cancellation. Keep
+        # the active item in the persistent queue so it can resume after a
+        # restart. process_finished() ignores the termination triggered by
+        # closing, preventing it from overwriting the saved Waiting state.
+        if self.current_index >= 0:
+            item = self.queue_items[self.current_index]
+            if item.status == QueueItem.DOWNLOADING:
+                item.status = QueueItem.WAITING
+                self.refresh_queue_item(item)
+
         if self.process.state() != QProcess.ProcessState.NotRunning:
-            self.cancelling = True
             self.terminate_gallery_process()
+
+        self.current_index = -1
+        self.save_queue()
         event.accept()
 
     def log_event(self, glyph: str, color: str, message: str) -> None:
