@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QProcess, QSettings, Qt
 from PySide6.QtGui import QColor, QIcon, QPalette
 from progress import parse_progress
+from queue_persistence import QueuePersistence
 
 from PySide6.QtWidgets import (
     QStyleFactory,
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
 
 
 APP_NAME = "ScumGUI"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 
 
 class QueueItem:
@@ -105,6 +106,7 @@ class MainWindow(QMainWindow):
         self.current_index = -1
         self.cancelling = False
         self.cancel_all_requested = False
+        self.queue_store = QueuePersistence()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -383,6 +385,25 @@ class MainWindow(QMainWindow):
         else:
             self.log_message("gallery-dl engine not found; PATH fallback unavailable.")
 
+        self.restore_queue()
+
+    def restore_queue(self) -> None:
+        restored = 0
+        for saved in self.queue_store.load():
+            item = QueueItem(saved["url"], saved["destination"])
+            self.queue_items.append(item)
+            list_item = QListWidgetItem()
+            item.list_item = list_item
+            self.queue.addItem(list_item)
+            self.refresh_queue_item(item)
+            restored += 1
+        if restored:
+            self.update_queue_progress()
+            self.log_message(f"Restored {restored} unfinished queue item(s).")
+
+    def save_queue(self) -> None:
+        self.queue_store.save(self.queue_items)
+
     def browse_destination(self) -> None:
         current = Path(self.destination_edit.text().strip()).expanduser()
         if not current.is_dir():
@@ -431,6 +452,7 @@ class MainWindow(QMainWindow):
 
         self.url_edit.clear()
         self.update_queue_progress()
+        self.save_queue()
         self.log_message(f"Added: {destination}  —  {url}")
 
     def refresh_queue_item(self, item: QueueItem) -> None:
@@ -588,6 +610,7 @@ class MainWindow(QMainWindow):
         self.update_queue_progress()
         item.status = QueueItem.DOWNLOADING
         self.refresh_queue_item(item)
+        self.save_queue()
 
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -692,6 +715,7 @@ if ($processes.Count -gt 0) {
                     item.status = QueueItem.CANCELLED
                     self.refresh_queue_item(item)
             self.update_queue_progress()
+            self.save_queue()
             self.start_next_or_finish()
             return
 
@@ -703,6 +727,7 @@ if ($processes.Count -gt 0) {
                 item.status = QueueItem.CANCELLED
                 self.refresh_queue_item(item)
         self.update_queue_progress()
+        self.save_queue()
         # Do not start another gallery-dl process after this one exits.
         # Waiting items are cancelled before their destination folders are
         # created, so Cancel All cannot leave a trail of empty folders.
@@ -879,6 +904,7 @@ if ($processes.Count -gt 0) {
 
         self.refresh_queue_item(item)
         self.update_queue_progress()
+        self.save_queue()
         elapsed = time.monotonic() - item.started_at if item.started_at else 0
         self.log_message(
             f"Finished: {item.url} — {item.status} "
@@ -926,6 +952,13 @@ if ($processes.Count -gt 0) {
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.cancel_all_button.setEnabled(False)
+
+    def closeEvent(self, event) -> None:
+        self.save_queue()
+        if self.process.state() != QProcess.ProcessState.NotRunning:
+            self.cancelling = True
+            self.terminate_gallery_process()
+        event.accept()
 
     def log_event(self, glyph: str, color: str, message: str) -> None:
         cursor = self.log.textCursor()
