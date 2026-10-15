@@ -153,14 +153,26 @@ jobs:
             Write-Host "Removed Ultra.cc download links from release notes."
           }
 
-          gh release upload "$env:RELEASE_TAG" "$env:RELEASE_ZIP_PATH" --repo "$env:GITHUB_REPOSITORY"
+          $assetName = $env:RELEASE_ZIP_NAME
+
+          $existingAssets = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
           if ($LASTEXITCODE -ne 0) {
-            throw "GitHub Release asset upload failed."
+            throw "Could not inspect release assets."
+          }
+
+          if ($existingAssets -contains $assetName) {
+            Write-Host "Asset already exists; skipping upload: $assetName"
+          }
+          else {
+            gh release upload "$env:RELEASE_TAG" "$env:RELEASE_ZIP_PATH" --repo "$env:GITHUB_REPOSITORY"
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitHub Release asset upload failed."
+            }
           }
 
           $assets = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json assets | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or -not ($assets.assets | Where-Object name -EQ $env:RELEASE_ZIP_NAME)) {
-            throw "GitHub did not confirm the uploaded versioned ZIP asset."
+          if ($LASTEXITCODE -ne 0 -or -not ($assets.assets | Where-Object name -EQ $assetName)) {
+            throw "GitHub did not confirm the release asset: $assetName"
           }
 
-          Write-Host "Confirmed GitHub Release asset: $env:RELEASE_ZIP_NAME"
+          Write-Host "Confirmed GitHub Release asset: $assetName"
