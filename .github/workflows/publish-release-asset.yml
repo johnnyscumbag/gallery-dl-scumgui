@@ -29,6 +29,10 @@ jobs:
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          ULTRA_HOST: ${{ secrets.ULTRA_HOST }}
+          ULTRA_USER: ${{ secrets.ULTRA_USER }}
+          ULTRA_SSH_KEY: ${{ secrets.ULTRA_SSH_KEY }}
+          ULTRA_SFTP_PATH: ${{ secrets.ULTRA_SFTP_PATH }}
         run: |
           $tag = $env:RELEASE_TAG
 
@@ -48,16 +52,64 @@ jobs:
 
           $commitSha = (git rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0 -or $commitSha -notmatch '^[0-9a-f]{40}$') {
-            throw "Could not determine the release commit's short SHA."
+            throw "Could not determine the release commit's SHA."
           }
           $shortSha = $commitSha.Substring(0, 7)
 
           $zipName = "ScumGUI-windows-x64-v$version-$shortSha.zip"
           $zipPath = Join-Path $env:RUNNER_TEMP $zipName
-          $downloadUrl = "https://JOHNNY404.psyche.usbx.me/scumgui/$zipName"
+          $keyPath = Join-Path $env:RUNNER_TEMP "scumgui_ultra_key"
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "scumgui_known_hosts"
 
-          Write-Host "Downloading the existing build from $downloadUrl"
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
+          $privateKey = $env:ULTRA_SSH_KEY.Trim()
+          $privateKey = [regex]::Replace($privateKey, "\r\n?", [Environment]::NewLine)
+          $privateKey = $privateKey.Replace("\" + "n", [Environment]::NewLine)
+
+          if ($privateKey -notmatch '^-----BEGIN OPENSSH PRIVATE KEY-----[\r\n]+[\s\S]+[\r\n]+-----END OPENSSH PRIVATE KEY-----$') {
+            throw "The ULTRA_SSH_KEY secret is not in OpenSSH private-key format."
+          }
+
+          [System.IO.File]::WriteAllText(
+            $keyPath,
+            $privateKey + [Environment]::NewLine,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+          if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
+            throw "OpenSSH client (ssh) is not available on the runner."
+          }
+          if (-not (Get-Command scp -ErrorAction SilentlyContinue)) {
+            throw "OpenSSH client (scp) is not available on the runner."
+          }
+
+          icacls $keyPath /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Host
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not restrict permissions on the temporary SSH private key."
+          }
+
+          ssh-keygen -y -f $keyPath > $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "The ULTRA_SSH_KEY secret could not be parsed by OpenSSH."
+          }
+
+          Write-Host "Testing SSH authentication to Ultra.cc..."
+          ssh -i $keyPath -o "BatchMode=yes" -o "PreferredAuthentications=publickey" -o "StrictHostKeyChecking=accept-new" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}" "true"
+          if ($LASTEXITCODE -ne 0) {
+            throw "SSH authentication to Ultra.cc failed."
+          }
+
+          if (-not (Test-Path $knownHostsPath) -or (Get-Item $knownHostsPath).Length -eq 0) {
+            throw "SSH did not create a known_hosts entry."
+          }
+
+          $remotePath = "$($env:ULTRA_SFTP_PATH)/$zipName"
+
+          Write-Host "Downloading existing build via SCP: $zipName"
+          scp -i $keyPath -o "BatchMode=yes" -o "StrictHostKeyChecking=yes" -o "UserKnownHostsFile=$knownHostsPath" "${env:ULTRA_USER}@${env:ULTRA_HOST}:$remotePath" $zipPath
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "SCP download failed for $zipName."
+          }
 
           if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -eq 0) {
             throw "The versioned Windows ZIP was not downloaded."
