@@ -1,0 +1,114 @@
+name: Publish Windows release asset
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach its versioned Windows ZIP to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows-asset:
+    name: Attach versioned Windows ZIP
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+
+      - name: Download and validate versioned ZIP
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          $tag = $env:RELEASE_TAG
+
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Release tag '$tag' is not a stable ScumGUI version tag."
+          }
+
+          $versionMatch = Select-String -Path "src/scumgui.py" -Pattern '^APP_VERSION\s*=\s*"([^"]+)"\s*$'
+          if (-not $versionMatch) {
+            throw "APP_VERSION was not found in src/scumgui.py."
+          }
+
+          $version = $versionMatch.Matches[0].Groups[1].Value
+          if ($tag -ne "v$version") {
+            throw "Tag '$tag' does not match checked-out application version '$version'."
+          }
+
+          $commitSha = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $commitSha -notmatch '^[0-9a-f]{40}$') {
+            throw "Could not determine the release commit's short SHA."
+          }
+          $shortSha = $commitSha.Substring(0, 7)
+
+          $zipName = "ScumGUI-windows-x64-v$version-$shortSha.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+          $downloadUrl = "https://JOHNNY404.psyche.usbx.me/scumgui/$zipName"
+
+          Write-Host "Downloading the existing build from $downloadUrl"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
+
+          if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -eq 0) {
+            throw "The versioned Windows ZIP was not downloaded."
+          }
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            if (-not ($archive.Entries | Where-Object FullName -EQ "ScumGUI/ScumGUI.exe")) {
+              throw "The downloaded ZIP does not contain ScumGUI/ScumGUI.exe."
+            }
+          } finally {
+            $archive.Dispose()
+          }
+
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+          "RELEASE_ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+          "RELEASE_ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+          Get-Item $zipPath | Select-Object Name, Length
+
+      - name: Upload ZIP to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $release = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json body | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read release notes for $env:RELEASE_TAG."
+          }
+
+          $cleanBody = ($release.body -split '\r?\n' | Where-Object { $_ -notmatch '(?i)psyche\.usbx\.me' }) -join "`n"
+          $cleanBody = ($cleanBody -replace '\n{3,}', "`n`n").Trim()
+          $cleanBody = ($cleanBody -replace '(?im)(?:\r?\n)*\*\*Downloads\*\*[ \t]*(?:\r?\n[ \t]*)*$', '').Trim()
+          if ($cleanBody -ne $release.body.Trim()) {
+            $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
+            [System.IO.File]::WriteAllText($notesPath, $cleanBody + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+            gh release edit "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --notes-file $notesPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not remove Ultra.cc links from the release notes."
+            }
+            Write-Host "Removed Ultra.cc download links from release notes."
+          }
+
+          gh release upload "$env:RELEASE_TAG" "$env:RELEASE_ZIP_PATH" --repo "$env:GITHUB_REPOSITORY"
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release asset upload failed."
+          }
+
+          $assets = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not ($assets.assets | Where-Object name -EQ $env:RELEASE_ZIP_NAME)) {
+            throw "GitHub did not confirm the uploaded versioned ZIP asset."
+          }
+
+          Write-Host "Confirmed GitHub Release asset: $env:RELEASE_ZIP_NAME"
