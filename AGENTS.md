@@ -61,6 +61,13 @@ Git is the version history and recovery mechanism for ScumGUI.
 - Do not commit secrets, credentials, personal data, local caches, build artifacts, or generated files that are not intended to be version-controlled.
 - Follow the repository's existing `.gitignore` and commit conventions.
 
+### Codex co-author attribution
+
+- For commits where Codex makes a substantial implementation contribution, retain the repository's configured Git author identity and add this exact trailer as the final line of the commit message, separated from the subject and body by a blank line:
+  - `Co-authored-by: Codex <noreply@openai.com>`
+- Do not add the trailer to trivial, mechanical, or documentation-only changes where Codex did not materially contribute.
+- Do not change Git author or committer configuration to attribute Codex contributions.
+
 ### Pushes
 
 - Push completed commits to the canonical GitHub repository after relevant checks pass.
