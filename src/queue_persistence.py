@@ -66,13 +66,10 @@ class QueuePersistence:
                 "destination": destination,
             })
 
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_suffix(".tmp")
-            temporary.write_text(
-                json.dumps(pending, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            os.replace(temporary, self.path)
-        except OSError:
-            pass
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(pending, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.path)

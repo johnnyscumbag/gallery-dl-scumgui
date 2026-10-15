@@ -1,0 +1,151 @@
+import importlib
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from PySide6.QtCore import QProcess
+from PySide6.QtWidgets import QApplication, QListWidgetItem
+
+from src.queue_persistence import QueuePersistence
+
+
+@pytest.fixture(scope="module")
+def app_module():
+    application = QApplication.instance() or QApplication([])
+    module = importlib.import_module("scumgui")
+    yield module
+    application.quit()
+
+
+def make_window(app_module, monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    return app_module.MainWindow()
+
+
+def add_item(window, item):
+    item.list_item = QListWidgetItem()
+    window.queue_items.append(item)
+    window.queue.addItem(item.list_item)
+    window.refresh_queue_item(item)
+
+
+def test_restored_items_are_waiting_without_starting_downloads(
+    app_module, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    store = QueuePersistence()
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    store.path.write_text(
+        '[{"url":"https://example.com/one","destination":"D:\\\\One"},'
+        '{"url":"https://example.com/two","destination":"D:\\\\Two"}]',
+        encoding="utf-8",
+    )
+
+    window = app_module.MainWindow()
+
+    assert [item.status for item in window.queue_items] == [
+        app_module.QueueItem.WAITING,
+        app_module.QueueItem.WAITING,
+    ]
+    assert window.process.state() == QProcess.ProcessState.NotRunning
+    assert window.current_index == -1
+    window.close()
+
+
+def test_stop_all_persists_active_and_waiting_items_as_unfinished(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    active = app_module.QueueItem("https://example.com/active", str(tmp_path))
+    active.status = app_module.QueueItem.DOWNLOADING
+    waiting = app_module.QueueItem("https://example.com/waiting", str(tmp_path))
+    add_item(window, active)
+    add_item(window, waiting)
+    window.current_index = 0
+    window.stop_all_requested = True
+
+    window.process_finished(1, QProcess.ExitStatus.CrashExit)
+
+    assert active.status == app_module.QueueItem.WAITING
+    assert window.queue_store.load() == [
+        {"url": active.url, "destination": active.destination},
+        {"url": waiting.url, "destination": waiting.destination},
+    ]
+    assert window.current_index == -1
+    window.close()
+
+
+def test_failed_gallery_dl_launch_is_removed_from_persistent_queue(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    item = app_module.QueueItem("https://example.com/fail", str(tmp_path / "output"))
+    add_item(window, item)
+
+    class FailedProcess:
+        def state(self):
+            return QProcess.ProcessState.NotRunning
+
+        def setWorkingDirectory(self, _directory):
+            pass
+
+        def start(self, _engine, _args):
+            pass
+
+        def waitForStarted(self, _timeout):
+            return False
+
+    window.process = FailedProcess()
+    monkeypatch.setattr(app_module, "find_gallery_dl", lambda: "gallery-dl.exe")
+
+    window.start_download()
+
+    assert item.status == app_module.QueueItem.FAILED
+    assert window.queue_store.load() == []
+    window.close()
+
+
+def test_queue_write_errors_are_reported_by_main_window(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    reported = []
+
+    class FailingStore:
+        path = tmp_path / "ScumGUI" / "queue.json"
+
+        def save(self, _items):
+            raise OSError("disk full")
+
+    window.queue_store = FailingStore()
+    monkeypatch.setattr(
+        window,
+        "log_event",
+        lambda glyph, color, message: reported.append((glyph, color, message)),
+        raising=False,
+    )
+
+    window.save_queue()
+
+    assert len(reported) == 1
+    assert reported[0][:2] == ("✗", "red")
+    assert "queue.json" in reported[0][2]
+    assert "disk full" in reported[0][2]
+    window.close()
+
+
+def test_queue_write_errors_are_not_swallowed(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    store = QueuePersistence()
+    monkeypatch.setattr(
+        "src.queue_persistence.os.replace",
+        lambda *_args: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        store.save([])

@@ -410,7 +410,14 @@ class MainWindow(QMainWindow):
             self.log_message(f"Restored {restored} unfinished queue item(s).")
 
     def save_queue(self) -> None:
-        self.queue_store.save(self.queue_items)
+        try:
+            self.queue_store.save(self.queue_items)
+        except OSError as exc:
+            self.log_event(
+                "✗",
+                "red",
+                f"Could not save queue to {self.queue_store.path}: {exc}",
+            )
 
     def browse_destination(self) -> None:
         current = Path(self.destination_edit.text().strip()).expanduser()
@@ -653,6 +660,7 @@ class MainWindow(QMainWindow):
         if not self.process.waitForStarted(3000):
             item.status = QueueItem.FAILED
             self.refresh_queue_item(item)
+            self.save_queue()
             self.log_message("ERROR: Failed to start gallery-dl.")
             self.start_next_or_finish()
 
