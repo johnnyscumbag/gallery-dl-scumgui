@@ -12,6 +12,7 @@ from PySide6.QtCore import QProcess, QSettings, Qt
 from PySide6.QtGui import QColor, QIcon, QPalette
 from progress import parse_progress
 from queue_persistence import QueuePersistence
+from single_instance import SingleInstance
 
 from PySide6.QtWidgets import (
     QStyleFactory,
@@ -433,9 +434,13 @@ class MainWindow(QMainWindow):
             self.destination_edit.setText(str(Path(selected)))
 
     def add_url(self) -> None:
-        url = self.url_edit.text().strip()
+        if self.enqueue_url(self.url_edit.text()):
+            self.url_edit.clear()
+
+    def enqueue_url(self, url: str) -> bool:
+        url = url.strip()
         if not url:
-            return
+            return False
 
         destination_text = self.destination_edit.text().strip()
         if not destination_text:
@@ -444,7 +449,7 @@ class MainWindow(QMainWindow):
                 APP_NAME,
                 "Enter a destination folder before adding the URL.",
             )
-            return
+            return False
 
         destination_path = Path(destination_text).expanduser()
         if not destination_path.is_absolute():
@@ -453,7 +458,7 @@ class MainWindow(QMainWindow):
                 APP_NAME,
                 "The destination must be an absolute folder path.",
             )
-            return
+            return False
 
         destination = str(destination_path.resolve())
 
@@ -469,6 +474,15 @@ class MainWindow(QMainWindow):
         self.update_queue_progress()
         self.save_queue()
         self.log_message(f"Added: {destination}  —  {url}")
+        return True
+
+    def receive_forwarded_urls(self, urls: list[str]) -> None:
+        for url in urls:
+            self.enqueue_url(url)
+
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def refresh_queue_item(self, item: QueueItem) -> None:
         if item.list_item is None:
@@ -1061,6 +1075,17 @@ if ($processes.Count -gt 0) {
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+
+    instance = SingleInstance(QueuePersistence().path.parent / "instance.lock")
+    try:
+        is_primary = instance.start_or_forward(sys.argv[1:])
+    except (OSError, RuntimeError) as exc:
+        QMessageBox.critical(None, APP_NAME, f"Could not contact the running ScumGUI instance:\n\n{exc}")
+        return 1
+    if not is_primary:
+        return 0
+    app.aboutToQuit.connect(instance.close)
+
     style_name = "Fusion"
     qt_conf = app_root() / "qt.conf"
     if qt_conf.is_file():
@@ -1077,6 +1102,9 @@ def main() -> int:
     app.setStyle(style_name)
 
     window = MainWindow()
+    instance.urls_received.connect(window.receive_forwarded_urls)
+    for url in sys.argv[1:]:
+        window.enqueue_url(url)
     window.show()
     return app.exec()
 
