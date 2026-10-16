@@ -222,6 +222,20 @@ class MainWindow(QMainWindow):
         self.retry_button.clicked.connect(self.retry_selected)
         controls.addWidget(self.retry_button)
 
+        self.move_up_button = QPushButton("Move Up")
+        self.move_up_button.setToolTip(
+            "Move the selected queue item up without crossing an active download."
+        )
+        self.move_up_button.clicked.connect(self.move_selected_up)
+        controls.addWidget(self.move_up_button)
+
+        self.move_down_button = QPushButton("Move Down")
+        self.move_down_button.setToolTip(
+            "Move the selected queue item down without crossing an active download."
+        )
+        self.move_down_button.clicked.connect(self.move_selected_down)
+        controls.addWidget(self.move_down_button)
+
         controls.addStretch(1)
 
         self.download_button = QPushButton("Download")
@@ -558,6 +572,58 @@ class MainWindow(QMainWindow):
         self.log_message(
             f"Returned {retried} failed or partially completed item(s) to the waiting queue."
         )
+
+    def move_selected_up(self) -> None:
+        self.move_selected(-1)
+
+    def move_selected_down(self) -> None:
+        self.move_selected(1)
+
+    def move_selected(self, direction: int) -> None:
+        selected = self.queue.selectedItems()
+        if len(selected) != 1:
+            return
+
+        row = self.queue.row(selected[0])
+        target_row = row + direction
+        if not (0 <= row < len(self.queue_items)):
+            return
+        if not (0 <= target_row < len(self.queue_items)):
+            return
+
+        item = self.queue_items[row]
+        target = self.queue_items[target_row]
+        process_running = (
+            self.process.state() != QProcess.ProcessState.NotRunning
+        )
+
+        if process_running:
+            # The active item must remain fixed. Only Waiting items behind it
+            # may be reordered, and they may only swap with another Waiting item.
+            if (
+                item.status != QueueItem.WAITING
+                or target.status != QueueItem.WAITING
+                or row <= self.current_index
+                or target_row <= self.current_index
+            ):
+                return
+
+        self.queue_items[row], self.queue_items[target_row] = (
+            self.queue_items[target_row],
+            self.queue_items[row],
+        )
+        list_item = self.queue.takeItem(row)
+        self.queue.insertItem(target_row, list_item)
+        self.queue.setCurrentItem(list_item)
+        list_item.setSelected(True)
+
+        if 0 <= self.current_index < len(self.queue_items):
+            current_item = self.queue_items[self.current_index]
+            self.current_index = self.queue_items.index(current_item)
+
+        self.update_queue_progress()
+        self.save_queue()
+        self.log_message(f"Moved queue item to position {target_row + 1}.")
 
     def remove_selected(self) -> None:
         selected_rows = sorted(

@@ -208,3 +208,72 @@ def test_retry_selected_resets_failed_and_partial_items(
         {"url": partial.url, "destination": partial.destination},
     ]
     window.close()
+
+
+
+def test_move_waiting_item_keeps_list_order_and_persists_queue(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    first = app_module.QueueItem("https://example.com/first", str(tmp_path))
+    second = app_module.QueueItem("https://example.com/second", str(tmp_path))
+    third = app_module.QueueItem("https://example.com/third", str(tmp_path))
+    for item in (first, second, third):
+        add_item(window, item)
+
+    second.list_item.setSelected(True)
+    window.move_selected_up()
+
+    assert window.queue_items == [second, first, third]
+    assert [window.queue.item(i) for i in range(window.queue.count())] == [
+        second.list_item, first.list_item, third.list_item
+    ]
+    assert window.queue.currentItem() is second.list_item
+    assert [entry["url"] for entry in window.queue_store.load()] == [
+        second.url, first.url, third.url
+    ]
+    window.close()
+
+
+def test_move_down_cannot_cross_active_or_nonwaiting_items(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    active = app_module.QueueItem("https://example.com/active", str(tmp_path))
+    active.status = app_module.QueueItem.DOWNLOADING
+    waiting = app_module.QueueItem("https://example.com/waiting", str(tmp_path))
+    finished = app_module.QueueItem("https://example.com/finished", str(tmp_path))
+    finished.status = app_module.QueueItem.COMPLETED
+    later = app_module.QueueItem("https://example.com/later", str(tmp_path))
+    for item in (active, waiting, finished, later):
+        add_item(window, item)
+    window.current_index = 0
+    window.process.state = lambda: QProcess.ProcessState.Running
+
+    waiting.list_item.setSelected(True)
+    window.move_selected_down()
+    assert window.queue_items == [active, waiting, finished, later]
+
+    later.list_item.setSelected(True)
+    window.move_selected_up()
+    assert window.queue_items == [active, waiting, finished, later]
+    assert window.current_index == 0
+    window.close()
+
+
+def test_move_buttons_reorder_queue_when_idle(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    first = app_module.QueueItem("https://example.com/first", str(tmp_path))
+    second = app_module.QueueItem("https://example.com/second", str(tmp_path))
+    first.status = app_module.QueueItem.COMPLETED
+    for item in (first, second):
+        add_item(window, item)
+
+    second.list_item.setSelected(True)
+    window.move_selected_up()
+
+    assert window.queue_items == [second, first]
+    assert window.current_index == -1
+    window.close()
