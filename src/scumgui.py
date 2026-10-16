@@ -920,7 +920,9 @@ if ($processes.Count -gt 0) {
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
-        self.process.waitForFinished(3000)
+        # Do not wait first and then inspect/kill again: the finished
+        # signal can start the next queue item while waitForFinished() runs,
+        # causing the cleanup below to kill that new item instead.
         if self.process.state() != QProcess.ProcessState.NotRunning:
             self.process.kill()
             self.process.waitForFinished(1000)
