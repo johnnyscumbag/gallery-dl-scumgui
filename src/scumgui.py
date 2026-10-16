@@ -150,6 +150,8 @@ class MainWindow(QMainWindow):
         self.cancelling = False
         self.cancel_all_requested = False
         self.stop_all_requested = False
+        self.stop_current_requested = False
+        self.deferred_item: QueueItem | None = None
         self.closing = False
         self.queue_store = QueuePersistence()
 
@@ -280,8 +282,17 @@ class MainWindow(QMainWindow):
         controls.addStretch(1)
 
         self.download_button = QPushButton("Download")
-        self.download_button.clicked.connect(self.start_download)
+        self.download_button.setToolTip("Start or resume the waiting queue.")
+        self.download_button.clicked.connect(self.resume_downloads)
         controls.addWidget(self.download_button)
+
+        self.stop_current_button = QPushButton("Stop Current")
+        self.stop_current_button.setEnabled(False)
+        self.stop_current_button.setToolTip(
+            "Stop the active item, leave it Waiting, and continue with the next item."
+        )
+        self.stop_current_button.clicked.connect(self.stop_current)
+        controls.addWidget(self.stop_current_button)
 
         self.stop_all_button = QPushButton("Stop All")
         self.stop_all_button.setEnabled(False)
@@ -818,11 +829,13 @@ class MainWindow(QMainWindow):
         item.started_at = time.monotonic()
         self.status_label.setText(f"Downloading: {destination}  —  {item.url}  |  D:0  S:0  E:0")
         self.download_button.setEnabled(False)
+        self.stop_current_button.setEnabled(True)
         self.cancel_button.setEnabled(True)
         self.cancel_all_button.setEnabled(True)
         self.stop_all_button.setEnabled(True)
         self.cancelling = False
         self.stop_all_requested = False
+        self.stop_current_requested = False
 
         self.process.setWorkingDirectory(str(destination))
         self.log_message(f"Starting: {destination}  —  {item.url}")
@@ -847,9 +860,18 @@ class MainWindow(QMainWindow):
             self.log_message("ERROR: Failed to start gallery-dl.")
             self.start_next_or_finish()
 
+    def resume_downloads(self) -> None:
+        # An item stopped with Stop Current is deferred for the rest of this
+        # automatic queue run. An explicit Download click makes it eligible again.
+        self.deferred_item = None
+        self.start_download()
+
     def next_waiting_index(self) -> int:
         for index, item in enumerate(self.queue_items):
-            if item.status == QueueItem.WAITING:
+            if (
+                item.status == QueueItem.WAITING
+                and item is not self.deferred_item
+            ):
                 return index
         return -1
 
@@ -903,10 +925,26 @@ if ($processes.Count -gt 0) {
             self.process.kill()
             self.process.waitForFinished(1000)
 
+    def stop_current(self) -> None:
+        if (
+            self.process.state() == QProcess.ProcessState.NotRunning
+            or self.current_index < 0
+        ):
+            return
+
+        self.stop_current_requested = True
+        self.cancelling = False
+        self.stop_all_requested = False
+        self.log_message(
+            "Stopping the current item and continuing with the next waiting item…"
+        )
+        self.terminate_gallery_process()
+
     def cancel_download(self) -> None:
         if self.process.state() == QProcess.ProcessState.NotRunning:
             return
 
+        self.stop_current_requested = False
         self.cancelling = True
         self.log_message("Stopping gallery-dl…")
         self.terminate_gallery_process()
@@ -925,12 +963,15 @@ if ($processes.Count -gt 0) {
             self.cancel_all_button.setEnabled(False)
             return
 
+        self.stop_current_requested = False
         self.stop_all_requested = True
         self.cancelling = False
         self.log_message("Stopping gallery-dl and leaving the queue ready to resume…")
         self.terminate_gallery_process()
 
     def cancel_all(self) -> None:
+        self.stop_current_requested = False
+        self.deferred_item = None
         if self.process.state() == QProcess.ProcessState.NotRunning:
             for item in self.queue_items:
                 if item.status == QueueItem.WAITING:
@@ -1122,6 +1163,7 @@ if ($processes.Count -gt 0) {
             self.update_queue_progress()
             self.save_queue()
             self.stop_all_requested = False
+            self.stop_current_requested = False
             self.current_index = -1
             self.cancelling = False
             self.progress.setRange(0, 100)
@@ -1131,8 +1173,31 @@ if ($processes.Count -gt 0) {
             self.download_button.setEnabled(True)
             self.cancel_button.setEnabled(False)
             self.stop_all_button.setEnabled(False)
+            self.stop_current_button.setEnabled(False)
             self.cancel_all_button.setEnabled(False)
             self.log_message("Queue stopped. Click Download to resume.")
+            return
+
+        if self.stop_current_requested:
+            item.status = QueueItem.WAITING
+            self.deferred_item = item
+            self.refresh_queue_item(item)
+            self.update_queue_progress()
+            self.save_queue()
+            self.stop_current_requested = False
+            self.current_index = -1
+            self.cancelling = False
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.progress.setFormat("Stopped")
+            self.status_label.setText(
+                "Current item stopped — continuing with the next waiting item."
+            )
+            self.stop_current_button.setEnabled(False)
+            self.log_message(
+                f"Stopped current item; {item.url} remains Waiting for later resumption."
+            )
+            self.start_next_or_finish()
             return
 
         if self.cancelling:
@@ -1173,6 +1238,7 @@ if ($processes.Count -gt 0) {
     def start_next_or_finish(self) -> None:
         self.current_index = -1
         self.cancelling = False
+        self.stop_current_button.setEnabled(False)
 
         if self.cancel_all_requested:
             self.cancel_all_requested = False
@@ -1198,6 +1264,18 @@ if ($processes.Count -gt 0) {
 
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
+        if self.deferred_item is not None and self.deferred_item.status == QueueItem.WAITING:
+            self.progress.setFormat("Waiting")
+            self.status_label.setText(
+                "Queue finished — a stopped item is still Waiting. Click Download to resume."
+            )
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
+            self.stop_all_button.setEnabled(False)
+            self.stop_current_button.setEnabled(False)
+            self.cancel_all_button.setEnabled(False)
+            return
+
         self.progress.setFormat("Complete")
         totals = self.queue_totals()
         total_errors = totals[2]
