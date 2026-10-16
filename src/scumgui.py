@@ -8,9 +8,8 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QSettings, Qt
+from PySide6.QtCore import QPoint, QProcess, QSettings, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPolygon
-from PySide6.QtCore import QPoint
 from progress import parse_progress
 from queue_persistence import QueuePersistence
 from single_instance import SingleInstance
