@@ -238,6 +238,6 @@ jobs:
           **Version:** $env:SCUMGUI_VERSION  
           **Commit:** $env:GITHUB_SHA
 
-          - [Download this build ($env:SCUMGUI_ZIP_NAME)]($versionedUrl)
-          - [Download latest build]($latestUrl)
+          - <a href="$versionedUrl" target="_blank" rel="noopener noreferrer">Download this build ($env:SCUMGUI_ZIP_NAME)</a>
+          - <a href="$latestUrl" target="_blank" rel="noopener noreferrer">Download latest build</a>
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
