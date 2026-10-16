@@ -80,6 +80,29 @@ def test_stop_all_persists_active_and_waiting_items_as_unfinished(
     window.close()
 
 
+def test_terminate_gallery_process_does_not_wait_for_finished(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    engine = tmp_path / "gallery-dl.exe"
+    engine.write_text("", encoding="utf-8")
+    monkeypatch.setattr(app_module, "find_gallery_dl", lambda: str(engine))
+    monkeypatch.setattr(app_module.subprocess, "run", lambda *args, **kwargs: None)
+    killed = []
+    monkeypatch.setattr(window.process, "state", lambda: QProcess.ProcessState.Running)
+    monkeypatch.setattr(window.process, "kill", lambda: killed.append(True))
+    monkeypatch.setattr(
+        window.process,
+        "waitForFinished",
+        lambda *args: (_ for _ in ()).throw(AssertionError("must not block")),
+    )
+
+    window.terminate_gallery_process()
+
+    assert killed == [True]
+    window.close()
+
+
 def test_stop_current_preserves_item_and_advances_to_next_waiting(
     app_module, monkeypatch, tmp_path
 ):
