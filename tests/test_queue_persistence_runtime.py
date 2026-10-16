@@ -277,3 +277,87 @@ def test_move_buttons_reorder_queue_when_idle(
     assert window.queue_items == [second, first]
     assert window.current_index == -1
     window.close()
+
+
+
+def test_remove_selected_selects_nearest_remaining_item(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    items = [
+        app_module.QueueItem(f"https://example.com/{name}", str(tmp_path))
+        for name in ("first", "second", "third", "fourth")
+    ]
+    for item in items:
+        add_item(window, item)
+
+    items[1].list_item.setSelected(True)
+    window.remove_selected()
+
+    assert window.queue_items == [items[0], items[2], items[3]]
+    assert window.queue.currentItem() is items[2].list_item
+    assert items[2].list_item.isSelected()
+    assert [entry["url"] for entry in window.queue_store.load()] == [
+        items[0].url, items[2].url, items[3].url
+    ]
+    window.close()
+
+
+def test_remove_multiple_items_selects_item_at_earliest_removed_position(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    items = [
+        app_module.QueueItem(f"https://example.com/{name}", str(tmp_path))
+        for name in ("first", "second", "third", "fourth")
+    ]
+    for item in items:
+        add_item(window, item)
+
+    items[1].list_item.setSelected(True)
+    items[3].list_item.setSelected(True)
+    window.remove_selected()
+
+    assert window.queue_items == [items[0], items[2]]
+    assert window.queue.currentItem() is items[2].list_item
+    assert items[2].list_item.isSelected()
+    window.close()
+
+
+def test_remove_selected_keeps_active_item_and_selects_replacement(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    active = app_module.QueueItem("https://example.com/active", str(tmp_path))
+    active.status = app_module.QueueItem.DOWNLOADING
+    removable = app_module.QueueItem("https://example.com/removable", str(tmp_path))
+    later = app_module.QueueItem("https://example.com/later", str(tmp_path))
+    for item in (active, removable, later):
+        add_item(window, item)
+    window.current_index = 0
+    active.list_item.setSelected(True)
+    removable.list_item.setSelected(True)
+
+    window.remove_selected()
+
+    assert window.queue_items == [active, later]
+    assert window.current_index == 0
+    assert window.queue.currentItem() is later.list_item
+    assert later.list_item.isSelected()
+    window.close()
+
+
+def test_remove_last_queue_item_leaves_no_selection(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    item = app_module.QueueItem("https://example.com/only", str(tmp_path))
+    add_item(window, item)
+    item.list_item.setSelected(True)
+
+    window.remove_selected()
+
+    assert window.queue.count() == 0
+    assert window.queue.currentItem() is None
+    assert window.queue.selectedItems() == []
+    window.close()
