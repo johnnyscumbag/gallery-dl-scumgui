@@ -163,6 +163,9 @@ def test_stopping_multiple_items_keeps_all_deferred_items_waiting(
     for item in (first, second, third):
         add_item(window, item)
 
+    started = []
+    monkeypatch.setattr(window, "start_download", lambda: started.append(True))
+
     window.current_index = 0
     first.status = app_module.QueueItem.DOWNLOADING
     window.stop_current_requested = True
@@ -170,12 +173,11 @@ def test_stopping_multiple_items_keeps_all_deferred_items_waiting(
     assert first.status == app_module.QueueItem.WAITING
     assert first in window.deferred_items
     assert window.next_waiting_index() == 1
+    assert started == [True]
 
     window.current_index = 1
     second.status = app_module.QueueItem.DOWNLOADING
     window.stop_current_requested = True
-    started = []
-    monkeypatch.setattr(window, "start_download", lambda: started.append(True))
     window.process_finished(1, QProcess.ExitStatus.CrashExit)
 
     assert first.status == second.status == app_module.QueueItem.WAITING
