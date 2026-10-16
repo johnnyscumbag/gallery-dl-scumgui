@@ -80,6 +80,73 @@ def test_stop_all_persists_active_and_waiting_items_as_unfinished(
     window.close()
 
 
+def test_stop_current_preserves_item_and_advances_to_next_waiting(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    stopped = app_module.QueueItem("https://example.com/slow", str(tmp_path))
+    stopped.status = app_module.QueueItem.DOWNLOADING
+    next_item = app_module.QueueItem("https://example.com/next", str(tmp_path))
+    add_item(window, stopped)
+    add_item(window, next_item)
+    window.current_index = 0
+    window.stop_current_requested = True
+    started = []
+    monkeypatch.setattr(window, "start_download", lambda: started.append(True))
+
+    window.process_finished(1, QProcess.ExitStatus.CrashExit)
+
+    assert stopped.status == app_module.QueueItem.WAITING
+    assert window.deferred_item is stopped
+    assert window.next_waiting_index() == 1
+    assert started == [True]
+    assert window.queue_store.load() == [
+        {"url": stopped.url, "destination": stopped.destination},
+        {"url": next_item.url, "destination": next_item.destination},
+    ]
+    assert not window.stop_current_button.isEnabled()
+    window.close()
+
+
+def test_stop_current_waits_for_manual_resume_when_no_other_items(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    stopped = app_module.QueueItem("https://example.com/slow", str(tmp_path))
+    stopped.status = app_module.QueueItem.DOWNLOADING
+    add_item(window, stopped)
+    window.current_index = 0
+    window.stop_current_requested = True
+
+    window.process_finished(1, QProcess.ExitStatus.CrashExit)
+
+    assert stopped.status == app_module.QueueItem.WAITING
+    assert window.deferred_item is stopped
+    assert window.next_waiting_index() == -1
+    assert "Click Download to resume" in window.status_label.text()
+    assert window.queue_store.load() == [
+        {"url": stopped.url, "destination": stopped.destination},
+    ]
+    window.close()
+
+
+def test_manual_resume_makes_deferred_item_eligible_again(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    stopped = app_module.QueueItem("https://example.com/slow", str(tmp_path))
+    add_item(window, stopped)
+    window.deferred_item = stopped
+    started = []
+    monkeypatch.setattr(window, "start_download", lambda: started.append(True))
+
+    window.resume_downloads()
+
+    assert window.deferred_item is None
+    assert started == [True]
+    window.close()
+
+
 def test_failed_gallery_dl_launch_is_removed_from_persistent_queue(
     app_module, monkeypatch, tmp_path
 ):
