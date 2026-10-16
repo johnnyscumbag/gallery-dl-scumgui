@@ -878,8 +878,9 @@ class MainWindow(QMainWindow):
     def terminate_gallery_process(self) -> None:
         target = Path(find_gallery_dl() or "").resolve()
         if not target.is_file():
+            # Let the finished signal handle queue advancement after this
+            # method returns; blocking here can race with the next item.
             self.process.kill()
-            self.process.waitForFinished(1500)
             return
 
         # gallery-dl can create more than one process for a single run.
@@ -920,12 +921,11 @@ if ($processes.Count -gt 0) {
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
-        # Do not wait first and then inspect/kill again: the finished
-        # signal can start the next queue item while waitForFinished() runs,
-        # causing the cleanup below to kill that new item instead.
+        # Never block waiting for QProcess here. Its finished signal drives
+        # queue advancement, and a nested wait can process that signal before
+        # this cleanup returns, accidentally targeting the next queue item.
         if self.process.state() != QProcess.ProcessState.NotRunning:
             self.process.kill()
-            self.process.waitForFinished(1000)
 
     def stop_current(self) -> None:
         if (
