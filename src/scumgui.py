@@ -580,6 +580,7 @@ class MainWindow(QMainWindow):
         retryable = {
             QueueItem.COMPLETED_WITH_ERRORS,
             QueueItem.FAILED,
+            QueueItem.CANCELLED,
         }
         selected_items = self.queue.selectedItems()
         if not selected_items:
@@ -611,7 +612,8 @@ class MainWindow(QMainWindow):
         self.update_queue_progress()
         self.save_queue()
         self.log_message(
-            f"Returned {retried} failed or partially completed item(s) to the waiting queue."
+            f"Returned {retried} failed, cancelled, or partially completed item(s) "
+            "to the waiting queue."
         )
 
     def move_selected_up(self) -> None:
@@ -1138,7 +1140,9 @@ if ($processes.Count -gt 0) {
         elif exit_status == QProcess.ExitStatus.CrashExit:
             item.status = QueueItem.FAILED
             if not item.error_details:
-                item.error_details.append("gallery-dl exited unexpectedly.")
+                item.error_details.append(
+                    item.pending_error_reason or "gallery-dl exited unexpectedly."
+                )
         elif exit_code == 0:
             item.status = QueueItem.COMPLETED
         elif item.errors > 0 and (item.downloaded > 0 or item.skipped > 0):
@@ -1149,7 +1153,10 @@ if ($processes.Count -gt 0) {
         else:
             item.status = QueueItem.FAILED
             if not item.error_details:
-                item.error_details.append(f"gallery-dl exited with code {exit_code} without a file-level error detail.")
+                item.error_details.append(
+                    item.pending_error_reason
+                    or f"gallery-dl exited with code {exit_code} without a file-level error detail."
+                )
 
         self.refresh_queue_item(item)
         self.update_queue_progress()
