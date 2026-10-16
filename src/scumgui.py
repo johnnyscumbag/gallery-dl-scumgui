@@ -9,7 +9,8 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, QSettings, Qt
-from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPolygon
+from PySide6.QtCore import QPoint
 from progress import parse_progress
 from queue_persistence import QueuePersistence
 from single_instance import SingleInstance
@@ -90,6 +91,47 @@ def find_gallery_dl() -> str | None:
             return str(candidate)
 
     return shutil.which("gallery-dl")
+
+
+class TriangleButton(QPushButton):
+    """Compact queue-order button with a font-independent Qt-drawn triangle."""
+
+    def __init__(self, direction: str, accessible_name: str) -> None:
+        super().__init__()
+        self.direction = direction
+        self.setAccessibleName(accessible_name)
+        self.setFixedWidth(34)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color_group = (
+            QPalette.ColorGroup.Normal
+            if self.isEnabled()
+            else QPalette.ColorGroup.Disabled
+        )
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self.palette().color(color_group, QPalette.ColorRole.ButtonText))
+
+        center_x = self.width() // 2
+        center_y = self.height() // 2
+        half_width = 5
+        half_height = 4
+        if self.direction == "up":
+            points = QPolygon([
+                QPoint(center_x - half_width, center_y + half_height // 2),
+                QPoint(center_x + half_width, center_y + half_height // 2),
+                QPoint(center_x, center_y - half_height),
+            ])
+        else:
+            points = QPolygon([
+                QPoint(center_x - half_width, center_y - half_height // 2),
+                QPoint(center_x + half_width, center_y - half_height // 2),
+                QPoint(center_x, center_y + half_height),
+            ])
+        painter.drawPolygon(points)
 
 
 class MainWindow(QMainWindow):
@@ -222,14 +264,14 @@ class MainWindow(QMainWindow):
         self.retry_button.clicked.connect(self.retry_selected)
         controls.addWidget(self.retry_button)
 
-        self.move_up_button = QPushButton("Move Up")
+        self.move_up_button = TriangleButton("up", "Move Up")
         self.move_up_button.setToolTip(
             "Move the selected queue item up without crossing an active download."
         )
         self.move_up_button.clicked.connect(self.move_selected_up)
         controls.addWidget(self.move_up_button)
 
-        self.move_down_button = QPushButton("Move Down")
+        self.move_down_button = TriangleButton("down", "Move Down")
         self.move_down_button.setToolTip(
             "Move the selected queue item down without crossing an active download."
         )
