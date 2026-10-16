@@ -183,7 +183,9 @@ def test_stopping_multiple_items_keeps_all_deferred_items_waiting(
     assert first.status == second.status == app_module.QueueItem.WAITING
     assert first in window.deferred_items and second in window.deferred_items
     assert window.next_waiting_index() == 2
-    assert started == [True]
+    # Each Stop Current advances to the next eligible item, so the third
+    # item is started after stopping the second one.
+    assert started == [True, True]
     assert window.queue_store.load() == [
         {"url": first.url, "destination": first.destination},
         {"url": second.url, "destination": second.destination},
