@@ -149,3 +149,22 @@ def test_queue_write_errors_are_not_swallowed(monkeypatch, tmp_path):
 
     with pytest.raises(OSError, match="disk full"):
         store.save([])
+
+
+def test_file_errors_remain_available_in_queue_tooltip(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    item = app_module.QueueItem("https://example.com/gallery", str(tmp_path))
+    item.status = app_module.QueueItem.DOWNLOADING
+    item.pending_error_reason = "404 Not Found"
+    add_item(window, item)
+    window.current_index = 0
+
+    assert window.consume_result_marker("[SCUMGUI_ERROR] Photos/image.jpg")
+
+    tooltip = item.list_item.toolTip()
+    assert "Photos/image.jpg" in tooltip
+    assert "404 Not Found" in tooltip
+    assert item.error_details == ["Photos/image.jpg — 404 Not Found"]
+    window.close()

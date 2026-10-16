@@ -59,6 +59,7 @@ class QueueItem:
         # Holds the most recent file-level failure reason until gallery-dl's
         # --Print error event gives us the corresponding filename.
         self.pending_error_reason = ""
+        self.error_details: list[str] = []
         self.started_at = 0.0
 
 
@@ -496,6 +497,11 @@ class MainWindow(QMainWindow):
         else:
             text = f"[{item.status}]  {stats}  {display_destination}  —  {item.url}"
         item.list_item.setText(text)
+        item.list_item.setToolTip(
+            "\n".join(item.error_details)
+            if item.error_details
+            else f"URL: {item.url}\nDestination: {item.destination}"
+        )
 
         if item.status == QueueItem.COMPLETED:
             item.list_item.setForeground(QColor("green"))
@@ -912,6 +918,8 @@ if ($processes.Count -gt 0) {
                 else:
                     reason = item.pending_error_reason
                     message = f"{filename} — {reason}" if reason else filename
+                    item.error_details.append(message)
+                    self.refresh_queue_item(item)
                     self.log_event("✗", "red", message)
                     # Only an actual file-level error consumes the pending
                     # reason. Successful/skipped files must not wipe out a
@@ -968,6 +976,8 @@ if ($processes.Count -gt 0) {
             item.status = QueueItem.CANCELLED
         elif exit_status == QProcess.ExitStatus.CrashExit:
             item.status = QueueItem.FAILED
+            if not item.error_details:
+                item.error_details.append("gallery-dl exited unexpectedly.")
         elif exit_code == 0:
             item.status = QueueItem.COMPLETED
         elif item.errors > 0 and (item.downloaded > 0 or item.skipped > 0):
@@ -977,6 +987,8 @@ if ($processes.Count -gt 0) {
             item.status = QueueItem.COMPLETED_WITH_ERRORS
         else:
             item.status = QueueItem.FAILED
+            if not item.error_details:
+                item.error_details.append(f"gallery-dl exited with code {exit_code} without a file-level error detail.")
 
         self.refresh_queue_item(item)
         self.update_queue_progress()
