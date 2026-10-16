@@ -184,14 +184,21 @@ def test_retry_selected_resets_failed_and_partial_items(
     failed.error_details.append("old.jpg — old failure")
     partial = app_module.QueueItem("https://example.com/partial", str(tmp_path))
     partial.status = app_module.QueueItem.COMPLETED_WITH_ERRORS
+    cancelled = app_module.QueueItem("https://example.com/cancelled", str(tmp_path))
+    cancelled.status = app_module.QueueItem.CANCELLED
+    cancelled.downloaded = 1
+    cancelled.errors = 2
+    cancelled.pending_error_reason = "stale cancellation reason"
+    cancelled.error_details.append("stale cancellation detail")
     completed = app_module.QueueItem("https://example.com/done", str(tmp_path))
     completed.status = app_module.QueueItem.COMPLETED
 
-    for item in (failed, partial, completed):
+    for item in (failed, partial, cancelled, completed):
         add_item(window, item)
 
     failed.list_item.setSelected(True)
     partial.list_item.setSelected(True)
+    cancelled.list_item.setSelected(True)
     completed.list_item.setSelected(True)
 
     window.retry_selected()
@@ -202,13 +209,36 @@ def test_retry_selected_resets_failed_and_partial_items(
     assert failed.pending_error_reason == ""
     assert failed.error_details == []
     assert partial.status == app_module.QueueItem.WAITING
+    assert cancelled.status == app_module.QueueItem.WAITING
+    assert cancelled.downloaded == cancelled.skipped == cancelled.errors == 0
+    assert cancelled.pending_error_reason == ""
+    assert cancelled.error_details == []
     assert completed.status == app_module.QueueItem.COMPLETED
     assert window.queue_store.load() == [
         {"url": failed.url, "destination": failed.destination},
         {"url": partial.url, "destination": partial.destination},
+        {"url": cancelled.url, "destination": cancelled.destination},
     ]
     window.close()
 
+
+
+def test_failure_tooltip_prefers_gallery_dl_error_reason(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    item = app_module.QueueItem("https://example.com/unsupported", str(tmp_path))
+    item.status = app_module.QueueItem.DOWNLOADING
+    item.pending_error_reason = "Unsupported URL"
+    add_item(window, item)
+    window.current_index = 0
+
+    window.process_finished(64, QProcess.ExitStatus.NormalExit)
+
+    assert item.status == app_module.QueueItem.FAILED
+    assert item.error_details == ["Unsupported URL"]
+    assert item.list_item.toolTip() == "Unsupported URL"
+    window.close()
 
 
 def test_move_waiting_item_keeps_list_order_and_persists_queue(
