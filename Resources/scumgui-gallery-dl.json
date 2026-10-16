@@ -2,7 +2,7 @@
     "extractor": {
         "base-directory": ".",
         "directory": [],
-        "skip": "enumerate",
+        "skip": true,
         "postprocessors": [
             {
                 "name": "classify",
