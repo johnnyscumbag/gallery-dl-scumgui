@@ -144,7 +144,7 @@ def test_stop_current_waits_for_manual_resume_when_no_other_items(
     window.process_finished(1, QProcess.ExitStatus.CrashExit)
 
     assert stopped.status == app_module.QueueItem.WAITING
-    assert window.deferred_item is stopped
+    assert stopped in window.deferred_items
     assert window.next_waiting_index() == -1
     assert "Click Download to resume" in window.status_label.text()
     assert window.queue_store.load() == [
