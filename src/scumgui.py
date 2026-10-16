@@ -215,6 +215,13 @@ class MainWindow(QMainWindow):
         clear_button.clicked.connect(self.clear_finished)
         controls.addWidget(clear_button)
 
+        self.retry_button = QPushButton("Retry Selected")
+        self.retry_button.setToolTip(
+            "Return selected failed or partially completed items to the waiting queue."
+        )
+        self.retry_button.clicked.connect(self.retry_selected)
+        controls.addWidget(self.retry_button)
+
         controls.addStretch(1)
 
         self.download_button = QPushButton("Download")
@@ -513,6 +520,44 @@ class MainWindow(QMainWindow):
             item.list_item.setForeground(QColor("gray"))
         else:
             item.list_item.setForeground(self.palette().text().color())
+
+    def retry_selected(self) -> None:
+        retryable = {
+            QueueItem.COMPLETED_WITH_ERRORS,
+            QueueItem.FAILED,
+        }
+        selected_items = self.queue.selectedItems()
+        if not selected_items:
+            return
+
+        retried = 0
+        for list_item in selected_items:
+            row = self.queue.row(list_item)
+            if not 0 <= row < len(self.queue_items):
+                continue
+
+            item = self.queue_items[row]
+            if item.status not in retryable:
+                continue
+
+            item.status = QueueItem.WAITING
+            item.downloaded = 0
+            item.skipped = 0
+            item.errors = 0
+            item.current_file = ""
+            item.pending_error_reason = ""
+            item.error_details.clear()
+            self.refresh_queue_item(item)
+            retried += 1
+
+        if not retried:
+            return
+
+        self.update_queue_progress()
+        self.save_queue()
+        self.log_message(
+            f"Returned {retried} failed or partially completed item(s) to the waiting queue."
+        )
 
     def remove_selected(self) -> None:
         selected_rows = sorted(

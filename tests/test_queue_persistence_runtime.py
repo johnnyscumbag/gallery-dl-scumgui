@@ -168,3 +168,43 @@ def test_file_errors_remain_available_in_queue_tooltip(
     assert "404 Not Found" in tooltip
     assert item.error_details == ["Photos/image.jpg — 404 Not Found"]
     window.close()
+
+
+def test_retry_selected_resets_failed_and_partial_items(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    failed = app_module.QueueItem("https://example.com/failed", str(tmp_path))
+    failed.status = app_module.QueueItem.FAILED
+    failed.downloaded = 2
+    failed.skipped = 1
+    failed.errors = 3
+    failed.current_file = "old.jpg"
+    failed.pending_error_reason = "old failure"
+    failed.error_details.append("old.jpg — old failure")
+    partial = app_module.QueueItem("https://example.com/partial", str(tmp_path))
+    partial.status = app_module.QueueItem.COMPLETED_WITH_ERRORS
+    completed = app_module.QueueItem("https://example.com/done", str(tmp_path))
+    completed.status = app_module.QueueItem.COMPLETED
+
+    for item in (failed, partial, completed):
+        add_item(window, item)
+
+    failed.list_item.setSelected(True)
+    partial.list_item.setSelected(True)
+    completed.list_item.setSelected(True)
+
+    window.retry_selected()
+
+    assert failed.status == app_module.QueueItem.WAITING
+    assert failed.downloaded == failed.skipped == failed.errors == 0
+    assert failed.current_file == ""
+    assert failed.pending_error_reason == ""
+    assert failed.error_details == []
+    assert partial.status == app_module.QueueItem.WAITING
+    assert completed.status == app_module.QueueItem.COMPLETED
+    assert window.queue_store.load() == [
+        {"url": failed.url, "destination": failed.destination},
+        {"url": partial.url, "destination": partial.destination},
+    ]
+    window.close()
