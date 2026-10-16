@@ -688,6 +688,9 @@ class MainWindow(QMainWindow):
         if not removable_rows:
             return
 
+        # Keep the earliest removed position so focus can move to the
+        # nearest remaining item after the selected rows are deleted.
+        replacement_row = min(removable_rows)
         removable = set(removable_rows)
         self.queue_items = [
             item
@@ -702,6 +705,12 @@ class MainWindow(QMainWindow):
             self.current_index = self.queue_items.index(current_item)
         else:
             self.current_index = -1
+
+        if self.queue.count():
+            replacement_row = min(replacement_row, self.queue.count() - 1)
+            replacement_item = self.queue.item(replacement_row)
+            self.queue.setCurrentItem(replacement_item)
+            replacement_item.setSelected(True)
 
         self.update_queue_progress()
         self.save_queue()
