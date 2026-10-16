@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self.cancel_all_requested = False
         self.stop_all_requested = False
         self.stop_current_requested = False
-        self.deferred_item: QueueItem | None = None
+        self.deferred_items: set[QueueItem] = set()
         self.closing = False
         self.queue_store = QueuePersistence()
 
@@ -863,14 +863,14 @@ class MainWindow(QMainWindow):
     def resume_downloads(self) -> None:
         # An item stopped with Stop Current is deferred for the rest of this
         # automatic queue run. An explicit Download click makes it eligible again.
-        self.deferred_item = None
+        self.deferred_items.clear()
         self.start_download()
 
     def next_waiting_index(self) -> int:
         for index, item in enumerate(self.queue_items):
             if (
                 item.status == QueueItem.WAITING
-                and item is not self.deferred_item
+                and item not in self.deferred_items
             ):
                 return index
         return -1
@@ -1180,7 +1180,7 @@ if ($processes.Count -gt 0) {
 
         if self.stop_current_requested:
             item.status = QueueItem.WAITING
-            self.deferred_item = item
+            self.deferred_items.add(item)
             self.refresh_queue_item(item)
             self.update_queue_progress()
             self.save_queue()
@@ -1264,7 +1264,7 @@ if ($processes.Count -gt 0) {
 
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
-        if self.deferred_item is not None and self.deferred_item.status == QueueItem.WAITING:
+        if any(item.status == QueueItem.WAITING for item in self.deferred_items):
             self.progress.setFormat("Waiting")
             self.status_label.setText(
                 "Queue finished — a stopped item is still Waiting. Click Download to resume."
