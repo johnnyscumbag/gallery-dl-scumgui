@@ -537,13 +537,18 @@ def test_retrying_completed_with_errors_item_survives_next_item_completion(
     add_item(window, second)
     window.current_index = 0
 
-    # Simulate the queue starting the next waiting item after the first finishes.
+    # Simulate the queue starting whichever item is next eligible.
+    started = []
+
     def start_next_item():
         next_index = window.next_waiting_index()
-        assert next_index == 1
+        if next_index < 0:
+            return
         window.current_index = next_index
-        second.status = app_module.QueueItem.DOWNLOADING
-        window.refresh_queue_item(second)
+        item = window.queue_items[next_index]
+        item.status = app_module.QueueItem.DOWNLOADING
+        window.refresh_queue_item(item)
+        started.append(item)
 
     monkeypatch.setattr(window, "start_download", start_next_item)
 
@@ -561,8 +566,11 @@ def test_retrying_completed_with_errors_item_survives_next_item_completion(
     second.errors = 1
     window.process_finished(1, QProcess.ExitStatus.NormalExit)
 
-    assert first.status == app_module.QueueItem.WAITING
+    # A is eligible again, so it may start next; it must not be overwritten
+    # with B's Completed with errors status.
+    assert first.status == app_module.QueueItem.DOWNLOADING
     assert second.status == app_module.QueueItem.COMPLETED_WITH_ERRORS
-    assert window.current_index == -1
+    assert window.current_index == 0
+    assert started == [second, first]
     window.close()
 
