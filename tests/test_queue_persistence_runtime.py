@@ -522,3 +522,47 @@ def test_remove_last_queue_item_leaves_no_selection(
     assert window.queue.currentItem() is None
     assert window.queue.selectedItems() == []
     window.close()
+
+
+def test_retrying_completed_with_errors_item_survives_next_item_completion(
+    app_module, monkeypatch, tmp_path
+):
+    window = make_window(app_module, monkeypatch, tmp_path)
+    first = app_module.QueueItem("https://example.com/first", str(tmp_path))
+    first.status = app_module.QueueItem.DOWNLOADING
+    first.downloaded = 1
+    first.errors = 1
+    second = app_module.QueueItem("https://example.com/second", str(tmp_path))
+    add_item(window, first)
+    add_item(window, second)
+    window.current_index = 0
+
+    # Simulate the queue starting the next waiting item after the first finishes.
+    def start_next_item():
+        next_index = window.next_waiting_index()
+        assert next_index == 1
+        window.current_index = next_index
+        second.status = app_module.QueueItem.DOWNLOADING
+        window.refresh_queue_item(second)
+
+    monkeypatch.setattr(window, "start_download", start_next_item)
+
+    window.process_finished(1, QProcess.ExitStatus.NormalExit)
+    assert first.status == app_module.QueueItem.COMPLETED_WITH_ERRORS
+    assert second.status == app_module.QueueItem.DOWNLOADING
+    assert window.current_index == 1
+
+    first.list_item.setSelected(True)
+    window.retry_selected()
+    assert first.status == app_module.QueueItem.WAITING
+
+    # The second item's completion must only update the second item.
+    second.downloaded = 1
+    second.errors = 1
+    window.process_finished(1, QProcess.ExitStatus.NormalExit)
+
+    assert first.status == app_module.QueueItem.WAITING
+    assert second.status == app_module.QueueItem.COMPLETED_WITH_ERRORS
+    assert window.current_index == -1
+    window.close()
+
