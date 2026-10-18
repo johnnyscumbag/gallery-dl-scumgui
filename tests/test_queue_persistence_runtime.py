@@ -571,11 +571,13 @@ def test_retrying_completed_with_errors_item_survives_next_item_completion(
     window.current_index = 0
     window.process_finished(1, QProcess.ExitStatus.NormalExit)
 
-    # A is eligible again, so it may start next; it must not be overwritten
-    # with B's Completed with errors status.
-    assert first.status == app_module.QueueItem.DOWNLOADING
+    # Retrying while B is active should pause after B finishes.
+    # A remains Waiting until the user explicitly resumes the queue.
+    assert first.status == app_module.QueueItem.WAITING
     assert second.status == app_module.QueueItem.COMPLETED_WITH_ERRORS
-    assert window.current_index == 0
-    assert started == [second, first]
+    assert window.current_index == -1
+    assert window.active_item is None
+    assert started == [second]
+    assert "Queue paused" in window.status_label.text()
     window.close()
 
