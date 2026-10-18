@@ -546,6 +546,7 @@ def test_retrying_completed_with_errors_item_survives_next_item_completion(
             return
         window.current_index = next_index
         item = window.queue_items[next_index]
+        window.active_item = item
         item.status = app_module.QueueItem.DOWNLOADING
         window.refresh_queue_item(item)
         started.append(item)
@@ -564,6 +565,10 @@ def test_retrying_completed_with_errors_item_survives_next_item_completion(
     # The second item's completion must only update the second item.
     second.downloaded = 1
     second.errors = 1
+    # Simulate a stale index: the active process is still B, but the index
+    # points at A. Completion must use the captured active QueueItem instead.
+    window.active_item = second
+    window.current_index = 0
     window.process_finished(1, QProcess.ExitStatus.NormalExit)
 
     # A is eligible again, so it may start next; it must not be overwritten
