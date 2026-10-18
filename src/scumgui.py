@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         self.queue_items: list[QueueItem] = []
         self.current_index = -1
         self.active_item: QueueItem | None = None
+        self.pause_after_current = False
         self.cancelling = False
         self.cancel_all_requested = False
         self.stop_all_requested = False
@@ -620,6 +621,9 @@ class MainWindow(QMainWindow):
 
         if not retried:
             return
+
+        if self.active_item is not None:
+            self.pause_after_current = True
 
         self.update_queue_progress()
         self.save_queue()
@@ -1169,6 +1173,7 @@ if ($processes.Count -gt 0) {
             self.save_queue()
             self.stop_all_requested = False
             self.stop_current_requested = False
+            self.pause_after_current = False
             self.current_index = -1
             self.active_item = None
             self.cancelling = False
@@ -1262,6 +1267,22 @@ if ($processes.Count -gt 0) {
             self.cancel_button.setEnabled(False)
             self.stop_all_button.setEnabled(False)
             self.cancel_all_button.setEnabled(False)
+            return
+
+        if self.pause_after_current:
+            self.pause_after_current = False
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.progress.setFormat("Paused")
+            self.status_label.setText(
+                "Queue paused — retried items remain Waiting. Click Download to resume."
+            )
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
+            self.stop_all_button.setEnabled(False)
+            self.stop_current_button.setEnabled(False)
+            self.cancel_all_button.setEnabled(False)
+            self.log_message("Queue paused after the active item; waiting items were not started automatically.")
             return
 
         next_index = self.next_waiting_index()
