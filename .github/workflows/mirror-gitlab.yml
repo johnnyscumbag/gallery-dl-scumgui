@@ -14,7 +14,7 @@ permissions:
 # Serialize mirror pushes so concurrent commits cannot race to update GitLab refs.
 concurrency:
   group: gitlab-mirror
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   mirror:
