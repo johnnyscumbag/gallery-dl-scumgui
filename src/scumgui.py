@@ -147,6 +147,7 @@ class MainWindow(QMainWindow):
 
         self.queue_items: list[QueueItem] = []
         self.current_index = -1
+        self.active_item: QueueItem | None = None
         self.cancelling = False
         self.cancel_all_requested = False
         self.stop_all_requested = False
@@ -805,6 +806,7 @@ class MainWindow(QMainWindow):
 
         self.current_index = next_index
         item = self.queue_items[self.current_index]
+        self.active_item = item
         item.pending_error_reason = ""
 
         destination = Path(item.destination)
@@ -1154,10 +1156,11 @@ if ($processes.Count -gt 0) {
         if self.closing:
             return
 
-        if self.current_index < 0:
-            return
-
-        item = self.queue_items[self.current_index]
+        item = self.active_item
+        if item is None:
+            if self.current_index < 0:
+                return
+            item = self.queue_items[self.current_index]
 
         if self.stop_all_requested:
             item.status = QueueItem.WAITING
@@ -1167,6 +1170,7 @@ if ($processes.Count -gt 0) {
             self.stop_all_requested = False
             self.stop_current_requested = False
             self.current_index = -1
+            self.active_item = None
             self.cancelling = False
             self.progress.setRange(0, 100)
             self.progress.setValue(0)
@@ -1188,6 +1192,7 @@ if ($processes.Count -gt 0) {
             self.save_queue()
             self.stop_current_requested = False
             self.current_index = -1
+            self.active_item = None
             self.cancelling = False
             self.progress.setRange(0, 100)
             self.progress.setValue(0)
@@ -1239,6 +1244,7 @@ if ($processes.Count -gt 0) {
 
     def start_next_or_finish(self) -> None:
         self.current_index = -1
+        self.active_item = None
         self.cancelling = False
         self.stop_current_button.setEnabled(False)
 
